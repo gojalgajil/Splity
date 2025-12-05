@@ -730,75 +730,8 @@ function SettlementPageContent() {
 
                     return (
                       <div key={expense.person.id} className="p-4 bg-muted/50 rounded-lg">
-                        <div className="flex justify-between items-start mb-2">
-                          <div className="flex items-center space-x-3">
-                            <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
-                              <span className="text-primary font-medium text-sm">
-                                {expense.person.name.charAt(0).toUpperCase()}
-                              </span>
-                            </div>
-                            <span className="font-medium text-foreground">{expense.person.name}:</span>
-                          </div>
-                          <div className="text-right">
-                            {expense.consumption > 0 ? (
-                              <div>
-                                {expense.bills.map((bill: any, index: number) => (
-                                  <div key={bill.id} className="flex items-center justify-between group">
-                                    <div className="text-sm text-muted-foreground flex items-center">
-                                      {formatCurrency(bill.consumptionShare)}
-                                      {index < expense.bills.length - 1 && ' + '}
-                                    </div>
-                                    <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                      <button
-                                        onClick={() => editBill(bill)}
-                                        className="p-1 text-muted-foreground hover:text-foreground hover:bg-accent rounded transition-colors"
-                                        title="Edit bill"
-                                      >
-                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                        </svg>
-                                      </button>
-                                      <button
-                                        onClick={() => deleteBill(bill.id)}
-                                        className="p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded transition-colors"
-                                        title="Delete bill"
-                                      >
-                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                        </svg>
-                                      </button>
-                                    </div>
-                                  </div>
-                                ))}
-                                {/* Also include consumption from shared equal-split bills that this person didn't create */}
-                                {(() => {
-                                  // Calculate additional consumption from equal-split bills not associated with this person
-                                  const allBills = []; // We can't access all bills here, so we'll calculate based on the consumption field
-                                  const additionalConsumption = expense.consumption - expense.bills.reduce((sum: number, bill: any) => sum + bill.consumptionShare, 0);
-
-                                  if (additionalConsumption > 0) {
-                                    return (
-                                      <div className="flex items-center justify-between group">
-                                        <div className="text-sm text-muted-foreground flex items-center">
-                                          + {formatCurrency(additionalConsumption)} (shared bills)
-                                        </div>
-                                      </div>
-                                    );
-                                  }
-                                  return null;
-                                })()}
-                                <div className="font-semibold text-foreground">
-                                  = {formatCurrency(expense.consumption)}
-                                </div>
-                              </div>
-                            ) : (
-                              <span className="text-muted-foreground">0 (didn't spend any money)</span>
-                            )}
-                          </div>
-                        </div>
-                        {/* Add descriptive text */}
-                        <div className="text-xs text-muted-foreground mt-2 italic">
-                          {descriptiveText}
+                        <div className="text-sm text-muted-foreground">
+                          <span className="font-semibold text-foreground">{expense.person.name}</span>: {consumptionParts.join(' + ')}
                         </div>
                       </div>
                     );
@@ -812,7 +745,7 @@ function SettlementPageContent() {
                 </div>
               </div>
 
-              {/* Per Person Share */}
+              {/* Per Person Share
               <div>
                 <h2 className="text-xl font-semibold text-foreground mb-4">
                   2. Split per Person
@@ -827,12 +760,12 @@ function SettlementPageContent() {
                     </div>
                   </div>
                 </div>
-              </div>
+              </div> */}
 
               {/* Individual Balances */}
               <div>
                 <h2 className="text-xl font-semibold text-foreground mb-4">
-                  3. Calculation of who should pay or receive
+                  2. Calculation of who should pay or receive
                 </h2>
                 <p className="text-muted-foreground mb-4">Already paid:</p>
                 <div className="space-y-3">

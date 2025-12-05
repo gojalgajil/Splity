@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { localStoragePeople } from '@/lib/localStorage';
+import { showConfirmDialog } from '@/lib/notifications';
 import { Navbar } from '@/components/navbar';
 
 interface Person {
@@ -103,8 +104,9 @@ export default function SelectUserPage() {
             </div>
             {people.length > 0 && (
               <button
-                onClick={() => {
-                  if (confirm('Are you sure you want to remove all people? This action cannot be undone.')) {
+                onClick={async () => {
+                  const confirmed = await showConfirmDialog('Are you sure you want to remove all people? This action cannot be undone.');
+                  if (confirmed) {
                     localStoragePeople.clearPeople();
                     setPeople([]);
                     setSelectedPerson(null);
