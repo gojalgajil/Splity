@@ -5,6 +5,7 @@ interface PersonExpense {
   person: Person;
   totalExpenses: number;
   consumption: number;
+  amountFronted: number;
   bills: Array<{
     id: string;
     total: number;
@@ -43,6 +44,20 @@ export function calculateSettlement(people: Person[]): SettlementResult {
   // Detect and clean up problematic bills
   const customSplitBills = allBills.filter(bill => bill.splitType === 'custom');
   console.log('Custom split bills found:', customSplitBills);
+
+  // Determine actual payer for custom splits (uploader pays if they don't consume)
+  const customBillPayers: Set<string> = new Set();
+  customSplitBills.forEach(bill => {
+    const uploader = bill.personId;
+    const uploaderShare = bill.personShares ? bill.personShares[uploader] || 0 : 0;
+    if (uploaderShare === 0) {
+      customBillPayers.add(uploader);
+    }
+  });
+  
+  // If no such uploader, fall back to first uploader for all
+  const actualPayerForCustom = customBillPayers.size > 0 ? customBillPayers.values().next().value : (customSplitBills.length > 0 ? customSplitBills[0].personId : null);
+  console.log(`actualPayerForCustom: ${actualPayerForCustom}`);
   
   if (customSplitBills.length > 0) {
     // Group bills by original payer to detect duplicates
@@ -76,102 +91,37 @@ export function calculateSettlement(people: Person[]): SettlementResult {
     });
   }
   
-  // Calculate expenses per person based on split type
+  // Calculate expenses per person
   const personExpenses: PersonExpense[] = people.map(person => {
-    let totalExpenses = 0; // This will be consumption (jatah makan)
-    let amountFronted = 0; // This will be 'menalangi' (amount fronted)
     const personBills = allBills.filter(bill => bill.personId === person.id);
-    
+
     console.log(`Bills for ${person.name}:`, personBills);
     console.log(`Number of bills for ${person.name}:`, personBills.length);
-    
-    // Check if any bill has custom split data
-    const hasCustomSplitBills = personBills.some(bill => bill.splitType === 'custom' && bill.personShares);
-    console.log(`${person.name} has custom split bills:`, hasCustomSplitBills);
-    
-    if (hasCustomSplitBills) {
-      // For custom split bills, use personShares for consumption, bill.total for amount fronted
-      personBills.forEach(bill => {
-        if (bill.splitType === 'custom' && bill.personShares) {
-          const shareAmount = bill.personShares[person.id] || 0;
-          console.log(`Custom split: ${person.name} consumption = ${shareAmount} from bill ${bill.id}`);
-          console.log(`Bill ${bill.id} personShares:`, bill.personShares);
-          totalExpenses += shareAmount; // Consumption (jatah makan)
-          // Don't add to amountFronted here - it will be handled by the CRITICAL section below
-        } else if (bill.splitType !== 'custom') {
-          // For equal split bills, distribute among ALL people
-          const sharePerPerson = bill.total / people.length;
-          totalExpenses += sharePerPerson; // Consumption (jatah makan)
-          amountFronted += bill.total; // Amount fronted (menalangi)
-          console.log(`Equal split bill ${bill.id}: ${bill.total} divided by ${people.length} = ${sharePerPerson} consumption for ${person.name}`);
-        } else {
-          console.log(`Non-custom split bill found in custom split context: adding ${bill.total} for ${person.name}`);
-          totalExpenses += bill.total;
-          amountFronted += bill.total;
-        }
-      });
-    } else {
-      // No custom split data, use equal split logic
-      console.log(`Using equal split logic for ${person.name}`);
-      
-      // For equal split bills, distribute the bill amount among all people
-      const equalSplitBills = personBills.filter(bill => bill.splitType !== 'custom');
-      let equalSplitExpenses = 0;
-      
-      equalSplitBills.forEach(bill => {
-        const sharePerPerson = bill.total / people.length;
-        equalSplitExpenses += sharePerPerson; // Consumption (jatah makan)
-        amountFronted += bill.total; // Amount fronted (menalangi)
-        console.log(`Equal split bill ${bill.id}: ${bill.total} divided by ${people.length} = ${sharePerPerson} consumption per person`);
-      });
-      
-      totalExpenses = equalSplitExpenses;
-    }
-    
-    // IMPORTANT: Also process ALL equal split bills in the system for this person (consumption only)
-    const allEqualSplitBills = allBills.filter(bill => bill.splitType !== 'custom');
-    allEqualSplitBills.forEach(bill => {
-      // Skip if this bill is already processed in personBills
-      if (!personBills.some(pb => pb.id === bill.id)) {
-        const sharePerPerson = bill.total / people.length;
-        totalExpenses += sharePerPerson; // Consumption only (jatah makan)
-        console.log(`Additional equal split bill ${bill.id}: ${bill.total} divided by ${people.length} = ${sharePerPerson} consumption for ${person.name}`);
+
+    // Amount fronted: sum of totals for all bills uploaded by this person
+    let amountFronted = personBills.reduce((sum, bill) => sum + bill.total, 0);
+    console.log(`Amount fronted by ${person.name}: ${amountFronted}`);
+
+    // Consumption: calculate from all bills they participate in
+    let consumption = 0;
+    allBills.forEach(bill => {
+      if (bill.splitType === 'custom' && bill.personShares) {
+        // Custom split: use the person's share
+        consumption += bill.personShares[person.id] || 0;
+        console.log(`Custom bill ${bill.id}: ${person.name} consumption += ${bill.personShares[person.id] || 0}`);
+      } else if (bill.splitType !== 'custom') {
+        // Equal split: everyone gets equal share
+        consumption += bill.total / people.length;
+        console.log(`Equal bill ${bill.id}: ${person.name} consumption += ${bill.total / people.length}`);
       }
     });
-    
-    // CRITICAL: For custom split bills, also track amount fronted for people who don't have bills
-    // This handles the titipan case where Valen paid but doesn't have bills in his name
-    customSplitBills.forEach(bill => {
-      // Check if this person was the original payer (titipan case)
-      // The original payer is the person who uploaded the bill (bill.personId)
-      if (bill.personId === person.id) {
-        // This person was the original payer
-        console.log(`Found ${person.name} was original payer for custom split bill ${bill.id}`);
-        // But in this scenario, Valen is the actual payer, so don't add this to others
-        if (person.name === 'Valen') {
-          amountFronted += bill.total;
-        } else {
-          // Do not add custom split bill amount to anyone else's menalangi calculation
-          console.log(`Skipping custom split bill ${bill.id} for ${person.name}'s menalangi calculation`);
-        }
-      }
-    });
-    
-    // CRITICAL FIX: For the titipan case, we need to identify who actually paid for custom split bills
-    // In this scenario, Valen paid for all custom split bills but they're registered under other people's names
-    // We need to track this separately
-    if (person.name === 'Valen') {
-      // Valen is the actual payer for all custom split bills in this scenario
-      // Valen is the original payer for all custom split bills in this scenario
-      customSplitBills.forEach(bill => {
-        amountFronted += bill.total;
-        console.log(`Valen titipan: Adding ${bill.total} for custom split bill ${bill.id}`);
-      });
-    }
-    
-    console.log(`Final consumption (jatah makan) for ${person.name}: ${totalExpenses}`);
-    console.log(`Amount fronted (menalangi) by ${person.name}: ${amountFronted}`);
-    
+
+    console.log(`Total consumption for ${person.name}: ${consumption}`);
+
+    // Balance = amount fronted - consumption
+    const balance = amountFronted - consumption;
+    console.log(`Balance for ${person.name}: ${amountFronted} - ${consumption} = ${balance}`);
+
     // Include all bills where this person has consumption (their personal bills OR shared bills they participate in)
     const relevantBills = allBills.filter(bill => {
       // If this is their own bill, include it
@@ -185,8 +135,9 @@ export function calculateSettlement(people: Person[]): SettlementResult {
 
     return {
       person,
-      totalExpenses: amountFronted - totalExpenses, // Use menalangi - jatah makan for balance calculation
-      consumption: totalExpenses,
+      totalExpenses: balance, // Now stores the net balance directly
+      consumption: consumption,
+      amountFronted: amountFronted,
       bills: relevantBills.map(bill => {
         // Calculate what this person consumed from this bill
         let consumptionShare = 0;
@@ -208,31 +159,8 @@ export function calculateSettlement(people: Person[]): SettlementResult {
     };
   });
 
-  // Calculate total expenses and per-person share
-  // Total expenses should be the total amount paid by everyone (50000)
-  // Not the net balance (30000)
-  const totalPayments = personExpenses.reduce((sum, expense) => {
-    // Calculate total payments for this person
-    const personBills = allBills.filter(bill => bill.personId === expense.person.id);
-    let personPayments = 0;
-    
-    personBills.forEach(bill => {
-      if (bill.splitType !== 'custom') {
-        personPayments += bill.total;
-      }
-    });
-    
-    // Add Valen's titipan payments
-    if (expense.person.name === 'Valen') {
-      customSplitBills.forEach(bill => {
-        personPayments += bill.total;
-      });
-    }
-    
-    return sum + personPayments;
-  }, 0);
-  
-  const totalExpenses = totalPayments;
+  // Total expenses = sum of all amount fronted by everyone
+  const totalExpenses = personExpenses.reduce((sum, expense) => sum + expense.amountFronted, 0);
   
   // For the menalangi - jatah calculation, we don't need perPersonShare
   // The balance is already calculated as menalangi - jatah in the personExpenses
@@ -312,9 +240,10 @@ export function calculateSettlement(people: Person[]): SettlementResult {
   people.forEach(person => {
     const expense = personExpenses.find(e => e.person.id === person.id);
     const netBalance = initialBalances[person.name];
+    const paidAmount = expense?.amountFronted || 0;
 
     summary[person.name] = {
-      paid: expense?.totalExpenses || 0,
+      paid: paidAmount,
       owes: netBalance < 0 ? Math.abs(netBalance) : 0,
       receives: netBalance > 0 ? netBalance : 0,
       netBalance

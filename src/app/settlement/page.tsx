@@ -9,6 +9,7 @@ import { calculateSettlement, formatCurrency } from '@/lib/settlement';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Navbar } from '@/components/navbar';
 import { StatusBadge } from '@/components/status-badge';
+import { showNotification, showConfirmDialog } from '@/lib/notifications';
 
 interface Person {
   id: string;
@@ -34,21 +35,10 @@ function SettlementPageContent() {
   const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
-      const notification = document.createElement('div');
-      notification.textContent = 'Copied to clipboard!';
-      notification.style.position = 'fixed';
-      notification.style.bottom = '20px';
-      notification.style.left = '50%';
-      notification.style.transform = 'translateX(-50%)';
-      notification.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
-      notification.style.color = 'white';
-      notification.style.padding = '8px 16px';
-      notification.style.borderRadius = '4px';
-      notification.style.zIndex = '1000';
-      document.body.appendChild(notification);
-      setTimeout(() => document.body.removeChild(notification), 2000);
+      showNotification('Copied to clipboard!');
     } catch (err) {
       console.error('Failed to copy text: ', err);
+      showNotification('Failed to copy to clipboard');
     }
   };
 
@@ -283,12 +273,15 @@ function SettlementPageContent() {
     localStorage.setItem('paymentStatus', JSON.stringify(newStatus));
   };
 
-  const handleClearAllBills = () => {
-    if (confirm('Are you sure you want to clear all bills? This will keep your people list but remove all bill data.')) {
+  const handleClearAllBills = async () => {
+    const confirmed = await showConfirmDialog('Are you sure you want to clear all bills? This will keep your people list but remove all bill data.');
+    if (confirmed) {
       // Clear all bills
       localStorageBills.clearBills();
       // Clear payment status
       localStorage.removeItem('paymentStatus');
+      // Show success notification
+      showNotification('All bills cleared successfully!');
       // Keep people data and reload the page
       router.push('/select-user');
     }
@@ -298,22 +291,25 @@ function SettlementPageContent() {
     router.push('/select-user');
   };
 
-  const deleteBill = (billId: string) => {
-    if (confirm('Are you sure you want to delete this bill?')) {
+  const deleteBill = async (billId: string) => {
+    const confirmed = await showConfirmDialog('Are you sure you want to delete this bill?');
+    if (confirmed) {
       localStorageBills.deleteBill(billId);
-      
+
       // If this was a direct bill, clear it and redirect
       if (directBill && directBill.id === billId) {
         setDirectBill(null);
         router.push('/');
         return;
       }
-      
+
       // Reload settlement data
       const savedPeople = localStoragePeople.getPeople();
       setPeople(savedPeople);
       const settlementData = calculateSettlement(savedPeople);
       setSettlement(settlementData);
+
+      showNotification('Bill deleted successfully!');
     }
   };
 
@@ -369,10 +365,11 @@ function SettlementPageContent() {
     // Try copy to clipboard first on all devices
     try {
       await navigator.clipboard.writeText(shareText);
-      alert('Settlement details copied to clipboard!');
+      showNotification('Settlement details copied to clipboard!');
       return;
     } catch (err) {
       console.error('Failed to copy to clipboard:', err);
+      showNotification('Failed to copy to clipboard');
     }
 
     // Fallback: try Web Share API
@@ -678,31 +675,48 @@ function SettlementPageContent() {
                 <div className="space-y-4">
                   {settlement.personExpenses.map((expense: any) => {
                     // Create combined description with items and amounts
-                    const consumptionParts = [];
+                    const consumptionParts: string[] = [];
                     let totalConsumed = 0;
 
                     expense.bills.forEach((bill: any) => {
-                      totalConsumed += bill.consumptionShare;
-
-                      // Combine item description with amount
-                      // Show actual item names only for bills uploaded by this person
-                      // For shared/custom-split bills that this person participates in, show "shared bill"
                       if (bill.splitType === 'custom' && bill.personShares) {
-                        // Custom split bill - only show item names if this person created/uploaded the bill
-                        if (bill.personName === expense.person.name) {
-                          // This person is the original uploader - show item names only if few items
-                          if (bill.items && bill.items.length <= 2 && bill.items.length > 0) {
-                            const itemNames = bill.items.map((item: any) => item.name).join(', ');
-                            consumptionParts.push(`paid for ${itemNames} ${formatCurrency(bill.consumptionShare)}`);
+                        // For custom split bills, show individual items consumed by this person
+                        if (bill.personShares[expense.person.id]) {
+                          const personShare = bill.personShares[expense.person.id];
+                          totalConsumed += personShare;
+
+                          // If this person uploaded the bill, they consumed nothing (payer case)
+                          if (bill.personId === expense.person.id) {
+                            // Payer case - show nothing consumed
+                            consumptionParts.push(`consumed nothing`);
                           } else {
-                            consumptionParts.push(`paid for bill ${formatCurrency(bill.consumptionShare)}`);
+                            // Consumer case - show items they were assigned
+                            // Get assignment data from localStorage splits
+                            const savedSplits = JSON.parse(localStorage.getItem('savedSplits') || '[]');
+                            const relevantSplit = savedSplits.find((split: any) =>
+                              split.splitType === 'custom' && split.people.some((p: any) => p.id === expense.person.id)
+                            );
+
+                            if (relevantSplit && relevantSplit.people.find((p: any) => p.id === expense.person.id)) {
+                              const personData = relevantSplit.people.find((p: any) => p.id === expense.person.id);
+                              if (personData.items && personData.items.length > 0) {
+                                // Show actual items assigned to this person with their calculated cost
+                                const itemDescriptions = personData.items.map((item: any) => {
+                                  const itemTotal = item.price * item.quantity;
+                                  return `${item.name} ${formatCurrency(itemTotal)}`;
+                                });
+                                consumptionParts.push(`paid for ${itemDescriptions.join(', ')}`);
+                              } else {
+                                consumptionParts.push(`shared bill ${formatCurrency(personShare)}`);
+                              }
+                            } else {
+                              consumptionParts.push(`shared bill ${formatCurrency(personShare)}`);
+                            }
                           }
-                        } else {
-                          // This person is participating in someone else's custom split bill
-                          consumptionParts.push(`shared bill ${formatCurrency(bill.consumptionShare)}`);
                         }
                       } else if (bill.splitType !== 'custom') {
-                        // Equal split bill - show item names if this person uploaded it and has few items
+                        // Equal split bill - show item names if this person uploaded it
+                        totalConsumed += bill.consumptionShare;
                         if (bill.personName === expense.person.name) {
                           if (bill.items && bill.items.length <= 2 && bill.items.length > 0) {
                             const itemNames = bill.items.map((item: any) => item.name).join(', ');
@@ -717,21 +731,16 @@ function SettlementPageContent() {
                       }
                     });
 
-                    // Calculate additional consumption from shared bills (if any)
-                    const additionalConsumption = expense.consumption - totalConsumed;
-                    if (additionalConsumption > 0) {
-                      consumptionParts.push(`shared bills ${formatCurrency(additionalConsumption)}`);
-                    }
-
-                    // Create combined descriptive text
-                    const descriptiveText = expense.consumption > 0
-                      ? `${expense.person.name} ${consumptionParts.join(' + ')}`
-                      : `${expense.person.name} consumed nothing`;
-
                     return (
                       <div key={expense.person.id} className="p-4 bg-muted/50 rounded-lg">
                         <div className="text-sm text-muted-foreground">
-                          <span className="font-semibold text-foreground">{expense.person.name}</span>: {consumptionParts.join(' + ')}
+                          <span className="font-semibold text-foreground">{expense.person.name}</span>: {
+                            consumptionParts.length > 0
+                              ? consumptionParts.join(' + ')
+                              : (expense.consumption > 0
+                                ? `consumed ${formatCurrency(expense.consumption)}`
+                                : 'consumed nothing')
+                          }
                         </div>
                       </div>
                     );
@@ -783,7 +792,7 @@ function SettlementPageContent() {
                         <span className="font-medium">{formatCurrency(data.paid)}</span>
                         {data.netBalance < 0 && (
                           <span className="text-destructive ml-2">
-                            → uderpaid {formatCurrency(Math.abs(data.netBalance))}
+                            → underpaid {formatCurrency(Math.abs(data.netBalance))}
                           </span>
                         )}
                         {data.netBalance > 0 && (

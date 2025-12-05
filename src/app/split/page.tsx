@@ -372,44 +372,25 @@ function SplitPageContent() {
           localStorageBills.deleteBill(bill.id);
         });
         
-        // For custom split, create bills ONLY for people who have shares > 0
-        // This prevents double counting the original payer's bill
-        people.forEach(person => {
-          const personShare = personShares[person.id];
-          console.log(`Processing ${person.name}: share=${personShare}, personId=${person.id}, currentUser.id=${currentUser.id}`);
-          
-          if (personShare > 0) {
-            const assignedItems = items.filter(item => 
-              assignments.some(a => a.itemId === item.id && a.personIds.includes(person.id))
-            );
-            
-            console.log(`Assigned items for ${person.name}:`, assignedItems);
-            
-            if (assignedItems.length > 0) {
-              console.log(`Creating bill for ${person.name} with total ${personShare}`);
-              const personBillData = {
-                personId: person.id,
-                personName: person.name,
-                items: assignedItems.map(item => ({
-                  name: item.name,
-                  quantity: item.quantity,
-                  price: item.price
-                })),
-                tax: tax ? (tax * assignedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0)) / subtotal : 0,
-                serviceCharge: serviceCharge ? (serviceCharge * assignedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0)) / subtotal : 0,
-                total: personShare,
-                splitType: 'custom' as const,
-                personShares: { [person.id]: personShare }
-              };
-              
-              localStorageBills.addBill(personBillData);
-            } else {
-              console.log(`No assigned items for ${person.name}, skipping bill creation`);
-            }
-          } else {
-            console.log(`Share is 0 for ${person.name}, skipping bill creation (titipan case)`);
-          }
-        });
+        // For custom split, create ONE bill uploaded by the current user (payer)
+        // with personShares indicating consumption for all participants
+        console.log('Creating single bill for custom split with personShares:', personShares);
+        const billData = {
+          personId: currentUser.id,
+          personName: currentUser.name,
+          items: items.map((item: any) => ({
+            name: item.name,
+            quantity: item.quantity,
+            price: item.price
+          })),
+          tax: tax,
+          serviceCharge: serviceCharge,
+          total: total,
+          splitType: 'custom' as const,
+          personShares: personShares
+        };
+
+        localStorageBills.addBill(billData);
       } else {
         // For equal split, create one bill for the current user
         const billData = {
