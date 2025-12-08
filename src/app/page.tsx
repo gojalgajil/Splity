@@ -46,7 +46,7 @@ export default function Home() {
     }
 
     // Navigate to upload flow
-    router.push('/select-user');
+    router.push('/add-people');
   };
 
 

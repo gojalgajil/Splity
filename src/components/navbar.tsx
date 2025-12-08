@@ -16,12 +16,12 @@ export function Navbar() {
   }, [pathname]);
 
   const isActive = (path: string) => {
-    return pathname === path || (path === '/upload' && pathname.includes('/select-user'));
+    return pathname === path || (path === '/add-people' && pathname.includes('/add-people'));
   };
 
   const navLinks = [
     { name: 'Home', path: '/' },
-    { name: 'Upload', path: '/select-user' },
+    { name: 'Upload', path: '/add-people' },
     { name: 'Settlement', path: '/settlement' },
   ];
 

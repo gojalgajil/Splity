@@ -287,41 +287,41 @@ function SplitPageContent() {
   };
 
   const handleCompleteSplit = () => {
-    console.log('handleCompleteSplit called');
+    console.log('DEBUG - handleCompleteSplit called');
     if (!currentUser) {
       console.error('No current user');
       return;
     }
-    
+
     try {
       // Calculate person shares for custom split
       const personShares: { [personId: string]: number } = {};
       if (splitOption === 'custom') {
-        console.log('Calculating person shares for custom split');
+        console.log('DEBUG - Calculating person shares for custom split');
         people.forEach(person => {
           // For the current user (payer), only calculate share if they actually consumed items
           // In titipan case, the payer should have 0 share
           if (person.id === currentUser.id) {
-            const consumedItems = items.filter(item => 
+            const consumedItems = items.filter(item =>
               assignments.some(a => a.itemId === item.id && a.personIds.includes(person.id))
             );
-            
+
             if (consumedItems.length === 0) {
               // Pure titipan case - payer has 0 share
               personShares[person.id] = 0;
-              console.log(`Setting 0 share for ${currentUser.name} - titipan case`);
+              console.log(`DEBUG - Setting 0 share for ${currentUser.name} - titipan case`);
               return;
             }
           }
-          
+
           personShares[person.id] = calculatePersonShare(person.id);
-          console.log(`Share for ${person.name}: ${personShares[person.id]}`);
+          console.log(`DEBUG - Share for ${person.name}: ${personShares[person.id]}`);
         });
       }
-      
-      console.log('Final personShares:', personShares);
-      
-      // Create a summary of the split
+
+      console.log('DEBUG - Final personShares:', personShares);
+
+      // Create a summary of the split with item assignments
       const splitSummary = {
         id: Date.now().toString(),
         date: new Date().toISOString(),
@@ -333,9 +333,9 @@ function SplitPageContent() {
           id: person.id,
           name: person.name,
           amount: splitOption === 'custom' ? personShares[person.id] : total / people.length,
-          items: splitOption === 'custom' 
+          items: splitOption === 'custom'
             ? items
-                .filter(item => 
+                .filter(item =>
                   assignments.some(
                     a => a.itemId === item.id && a.personIds.includes(person.id)
                   )
@@ -353,68 +353,49 @@ function SplitPageContent() {
         }
       };
 
+      console.log('DEBUG - Split summary to save:', splitSummary);
+
       // Save to localStorage with custom split information
       const savedSplits = JSON.parse(localStorage.getItem('savedSplits') || '[]');
       savedSplits.push(splitSummary);
       localStorage.setItem('savedSplits', JSON.stringify(savedSplits));
-      
-      if (splitOption === 'custom') {
-        console.log('Creating bills for custom split');
-        
-        // IMPORTANT: Remove any existing bills for the current user to prevent double counting
-        const existingBills = localStorageBills.getBills();
-        const currentUserBills = existingBills.filter(bill => bill.personId === currentUser.id);
-        console.log('Existing bills for current user:', currentUserBills);
-        
-        // Remove existing bills for the current user
-        currentUserBills.forEach(bill => {
-          console.log('Removing existing bill:', bill.id);
-          localStorageBills.deleteBill(bill.id);
-        });
-        
-        // For custom split, create ONE bill uploaded by the current user (payer)
-        // with personShares indicating consumption for all participants
-        console.log('Creating single bill for custom split with personShares:', personShares);
-        const billData = {
-          personId: currentUser.id,
-          personName: currentUser.name,
-          items: items.map((item: any) => ({
-            name: item.name,
-            quantity: item.quantity,
-            price: item.price
-          })),
-          tax: tax,
-          serviceCharge: serviceCharge,
-          total: total,
-          splitType: 'custom' as const,
-          personShares: personShares
-        };
+      console.log('DEBUG - Saved splits updated in localStorage');
 
-        localStorageBills.addBill(billData);
-      } else {
-        // For equal split, create one bill for the current user
-        const billData = {
-          personId: currentUser.id,
-          personName: currentUser.name,
-          items: items.map((item: any) => ({
-            name: item.name,
-            quantity: item.quantity,
-            price: item.price
-          })),
-          tax: tax,
-          serviceCharge: serviceCharge,
-          total: total,
-          splitType: (splitOption || 'equal') as 'equal' | 'custom',
-          personShares: undefined
-        };
-        
-        localStorageBills.addBill(billData);
-      }
-      
+      // Always create the bill record with proper data
+      const billData = {
+        personId: currentUser.id,
+        personName: currentUser.name,
+        items: items.map((item: any) => ({
+          name: item.name,
+          quantity: item.quantity,
+          price: item.price
+        })),
+        tax: tax,
+        serviceCharge: serviceCharge,
+        total: total,
+        splitType: splitOption || 'equal',
+        personShares: splitOption === 'custom' ? personShares : undefined
+      };
+
+      console.log('DEBUG - Bill data to save:', billData);
+
+      // Remove any existing bills for the current user to prevent double counting
+      const existingBills = localStorageBills.getBills();
+      const currentUserBills = existingBills.filter(bill => bill.personId === currentUser.id);
+      currentUserBills.forEach(bill => {
+        localStorageBills.deleteBill(bill.id);
+      });
+
+      localStorageBills.addBill(billData);
+      console.log('DEBUG - Bill saved to localStorage');
+
+      // Don't clear savedSplits - let settlement page handle filtering by recent time
+      console.log('DEBUG - Keeping savedSplits for settlement consumption mapping');
+
       // Navigate to settlement page
       console.log('Navigating to settlement page');
       router.push('/settlement');
-      
+
     } catch (error) {
       console.error('Error saving split:', error);
       alert('Gagal menyimpan split. Silakan coba lagi.');
@@ -549,7 +530,7 @@ function SplitPageContent() {
               type="button"
               onClick={() => {
                 handleCompleteSplit();
-                router.push('/select-user');
+                router.push('/add-bill');
               }}
               className="w-full px-4 py-3 border border-border rounded-md font-medium text-foreground hover:bg-accent transition-colors"
             >

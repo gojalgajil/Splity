@@ -170,7 +170,11 @@ function SettlementPageContent() {
         if (itemsParam && userId && userName) {
           // Direct settlement from upload/edit/split
           console.log('Processing direct settlement from URL params');
-          
+
+          // Clear old savedSplits to start fresh settlement session
+          localStorage.setItem('savedSplits', '[]');
+          console.log('DEBUG - Cleared savedSplits for fresh settlement session');
+
           try {
             const items = JSON.parse(itemsParam);
             const tax = taxParam === 'null' ? null : (taxParam ? parseFloat(taxParam) : null);
@@ -238,9 +242,14 @@ function SettlementPageContent() {
             return;
           }
           
-          setPeople(savedPeople);
-          const settlementData = calculateSettlement(savedPeople);
-          setSettlement(settlementData);
+        setPeople(savedPeople);
+        // Clear savedSplits if there are no bills to prevent showing stale data
+        if (allBills.length === 0) {
+          console.log('DEBUG - Clearing savedSplits since no bills exist');
+          localStorage.setItem('savedSplits', '[]');
+        }
+        const settlementData = calculateSettlement(savedPeople);
+        setSettlement(settlementData);
         }
       } catch (error) {
         console.error('Error loading settlement data:', error);
@@ -278,17 +287,19 @@ function SettlementPageContent() {
     if (confirmed) {
       // Clear all bills
       localStorageBills.clearBills();
+      // Clear savedSplits data too (FIX: prevents stale consumption data from showing)
+      localStorage.setItem('savedSplits', '[]');
       // Clear payment status
       localStorage.removeItem('paymentStatus');
       // Show success notification
       showNotification('All bills cleared successfully!');
-      // Keep people data and reload the page
-      router.push('/select-user');
+      // Keep people data and navigate to home
+      router.push('/');
     }
   };
 
   const handleAddMoreBills = () => {
-    router.push('/select-user');
+    router.push('/add-bill');
   };
 
   const deleteBill = async (billId: string) => {
@@ -460,7 +471,7 @@ function SettlementPageContent() {
         <div className="text-center">
           <p className="text-muted-foreground mb-4">No settlement data available</p>
           <button
-            onClick={() => router.push('/select-user')}
+            onClick={() => router.push('/add-bill')}
             className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90"
           >
             Start Adding Bills
@@ -670,81 +681,125 @@ function SettlementPageContent() {
 
               {/* Consumption Summary per Person */}
               <div>
+                {(() => {
+                  console.log('DEBUG - Starting consumption summary, personExpenses length:', settlement.personExpenses.length);
+                  console.log('DEBUG - Settlement object:', settlement);
+                  return null;
+                })()}
                 <h2 className="text-xl font-semibold text-foreground mb-4">1. Consumption Summary per Person</h2>
                 <p className="text-muted-foreground mb-4">Shows what each person consumed</p>
+
                 <div className="space-y-4">
-                  {settlement.personExpenses.map((expense: any) => {
-                    // Create combined description with items and amounts
-                    const consumptionParts: string[] = [];
-                    let totalConsumed = 0;
+                  {(() => {
+                    // Read savedSplits data directly
+                    const savedSplits = JSON.parse(localStorage.getItem('savedSplits') || '[]');
 
-                    expense.bills.forEach((bill: any) => {
-                      if (bill.splitType === 'custom' && bill.personShares) {
-                        // For custom split bills, show individual items consumed by this person
-                        if (bill.personShares[expense.person.id]) {
-                          const personShare = bill.personShares[expense.person.id];
-                          totalConsumed += personShare;
+                    return settlement.personExpenses.map((expense: any) => {
+                      // Enhanced consumption summary: combine custom item assignments + equal sharing
+                      let itemDescriptions: string[] = [];
+                      let totalEqualSharing = 0;
 
-                          // If this person uploaded the bill, they consumed nothing (payer case)
-                          if (bill.personId === expense.person.id) {
-                            // Payer case - show nothing consumed
-                            consumptionParts.push(`consumed nothing`);
-                          } else {
-                            // Consumer case - show items they were assigned
-                            // Get assignment data from localStorage splits
-                            const savedSplits = JSON.parse(localStorage.getItem('savedSplits') || '[]');
-                            const relevantSplit = savedSplits.find((split: any) =>
-                              split.splitType === 'custom' && split.people.some((p: any) => p.id === expense.person.id)
-                            );
+                      // Process ALL bills this person participated in for better aggregation
+                      console.log('DEBUG - Processing consumption for', expense.person.name, 'across all bills');
 
-                            if (relevantSplit && relevantSplit.people.find((p: any) => p.id === expense.person.id)) {
-                              const personData = relevantSplit.people.find((p: any) => p.id === expense.person.id);
-                              if (personData.items && personData.items.length > 0) {
-                                // Show actual items assigned to this person with their calculated cost
-                                const itemDescriptions = personData.items.map((item: any) => {
-                                  const itemTotal = item.price * item.quantity;
-                                  return `${item.name} ${formatCurrency(itemTotal)}`;
-                                });
-                                consumptionParts.push(`paid for ${itemDescriptions.join(', ')}`);
-                              } else {
-                                consumptionParts.push(`shared bill ${formatCurrency(personShare)}`);
+                      // Get all bills this person has consumption in
+                      expense.bills.forEach((bill: any) => {
+                        console.log('DEBUG - Processing bill:', bill.id, 'for person:', expense.person.name);
+
+                        // Check if this bill has detailed item assignments (custom split)
+                        const matchingSplit = savedSplits.find((split: any) => {
+                          // Time-based matching for recent transactions (15 minutes - more realistic for user flow)
+                          const splitTime = new Date(split.date).getTime();
+                          const fifteenMinutesAgo = Date.now() - 900000; // 15 minutes
+                          const isRecent = splitTime >= fifteenMinutesAgo;
+
+                          // Fallback matching criteria for robustness
+                          const creatorMatches = split.createdBy?.id === bill.personId ||
+                                                  split.createdBy?.name === bill.personName;
+                          const personMatches = split.people?.some((p: any) => p.id === expense.person.id ||
+                                                                        p.name === expense.person.name);
+
+                          console.log('DEBUG - Checking split match for bill:', bill.id);
+                          console.log('  - Split ID:', split.id, 'Type:', split.splitType);
+                          console.log('  - Creator matches:', creatorMatches, '(split.createdBy:',
+                            JSON.stringify(split.createdBy), 'vs bill.person:', bill.personId, bill.personName);
+                          console.log('  - Person matches:', personMatches, '(expense.person.id:', expense.person.id,
+                            'expense.person.name:', expense.person.name, 'split.people:', split.people?.map((p: {name: string; id: string}) => `${p.name}(${p.id})`));
+                          console.log('  - Time check:', isRecent, '(split time:', new Date(split.date), 'current time:', new Date());
+
+                          return split.splitType === 'custom' &&
+                                 creatorMatches &&
+                                 personMatches &&
+                                 isRecent;
+                        });
+
+                        if (matchingSplit) {
+                          // This bill has custom split with detailed item assignments
+                          console.log('DEBUG - Found matching custom split for bill:', bill.id);
+                          const personData = matchingSplit.people?.find((p: any) => p.id === expense.person.id);
+                          if (personData && personData.items && personData.items.length > 0) {
+                            // Aggregate item-specific consumption
+                            const seenItems = new Set<string>();
+                            personData.items.forEach((item: any) => {
+                              const itemKey = `${item.name}-${item.price}`;
+                              if (!seenItems.has(itemKey)) {
+                                seenItems.add(itemKey);
+                                // Show individual item cost (not multiplied by quantity)
+                                itemDescriptions.push(`${item.name} ${formatCurrency(item.price)}`);
+                                console.log('DEBUG - Added item:', `${item.name} ${formatCurrency(item.price)}`);
                               }
-                            } else {
-                              consumptionParts.push(`shared bill ${formatCurrency(personShare)}`);
-                            }
-                          }
-                        }
-                      } else if (bill.splitType !== 'custom') {
-                        // Equal split bill - show item names if this person uploaded it
-                        totalConsumed += bill.consumptionShare;
-                        if (bill.personName === expense.person.name) {
-                          if (bill.items && bill.items.length <= 2 && bill.items.length > 0) {
-                            const itemNames = bill.items.map((item: any) => item.name).join(', ');
-                            consumptionParts.push(`paid for ${itemNames} ${formatCurrency(bill.consumptionShare)}`);
+                            });
                           } else {
-                            consumptionParts.push(`paid for bill ${formatCurrency(bill.consumptionShare)}`);
+                            // Custom split but no specific item data - treat as equal sharing
+                            totalEqualSharing += bill.consumptionShare;
+                            console.log('DEBUG - Custom split without item data, adding to sharing:', bill.consumptionShare);
                           }
                         } else {
-                          // This is someone else's equal split bill
-                          consumptionParts.push(`shared bill ${formatCurrency(bill.consumptionShare)}`);
+                          // No custom split match - this is equal split bill
+                          // Add to equal sharing amount
+                          totalEqualSharing += bill.consumptionShare;
+                          console.log('DEBUG - Equal split bill detected, adding to sharing:', bill.consumptionShare);
                         }
-                      }
-                    });
+                      });
 
-                    return (
-                      <div key={expense.person.id} className="p-4 bg-muted/50 rounded-lg">
-                        <div className="text-sm text-muted-foreground">
-                          <span className="font-semibold text-foreground">{expense.person.name}</span>: {
-                            consumptionParts.length > 0
-                              ? consumptionParts.join(' + ')
-                              : (expense.consumption > 0
-                                ? `consumed ${formatCurrency(expense.consumption)}`
-                                : 'consumed nothing')
-                          }
+                      console.log('DEBUG - Final consumption for', expense.person.name, ':');
+                      console.log('  - Item descriptions:', itemDescriptions);
+                      console.log('  - Equal sharing:', totalEqualSharing);
+
+                      // Format the combined consumption description
+                      let consumptionParts: string[] = [];
+
+                      // Add item-specific consumption (from custom splits)
+                      if (itemDescriptions.length > 0) {
+                        consumptionParts.push(`paid for ${itemDescriptions.join(', ')}`);
+                      }
+
+                      // Add equal sharing if any
+                      if (totalEqualSharing > 0) {
+                        consumptionParts.push(`sharing ${formatCurrency(totalEqualSharing)}`);
+                      }
+
+                      let consumptionDescription: string;
+                      if (consumptionParts.length > 0) {
+                        consumptionDescription = consumptionParts.join(', ');
+                      } else if (expense.consumption > 0) {
+                        // Fallback if something went wrong with bill analysis
+                        consumptionDescription = `consumed ${formatCurrency(expense.consumption)}`;
+                      } else {
+                        consumptionDescription = 'consumed nothing';
+                      }
+
+                      console.log('DEBUG - Final consumption description:', consumptionDescription);
+
+                      return (
+                        <div key={expense.person.id} className="p-4 bg-muted/50 rounded-lg">
+                          <div className="text-sm text-muted-foreground">
+                            <span className="font-semibold text-foreground">{expense.person.name}</span>: {consumptionDescription}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    });
+                  })()}
                   <div className="flex justify-between items-center p-3 bg-primary/10 rounded-lg mt-4">
                     <span className="font-semibold text-foreground">Total =</span>
                     <span className="font-bold text-lg text-primary">

@@ -15,10 +15,8 @@ interface Person {
 export default function SelectUserPage() {
   const router = useRouter();
   const [people, setPeople] = useState<Person[]>([]);
-  const [selectedPeople, setSelectedPeople] = useState<string[]>([]);
   const [isAddingPerson, setIsAddingPerson] = useState(false);
   const [newPersonNames, setNewPersonNames] = useState(['', '', '']);
-  const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Fetch people from localStorage on mount
@@ -77,19 +75,14 @@ export default function SelectUserPage() {
     try {
       const updatedPeople = localStoragePeople.deletePerson(personId);
       setPeople(updatedPeople);
-      if (selectedPerson?.id === personId) {
-        setSelectedPerson(null);
-      }
     } catch (err) {
       console.error('Unexpected deletePerson error:', err);
     }
   };
 
   const handleContinue = () => {
-    if (selectedPerson) {
-      // Navigate to upload page with selected person info
-      router.push(`/upload?userId=${selectedPerson.id}&userName=${encodeURIComponent(selectedPerson.name)}`);
-    }
+    // Navigate to add-bill page to start adding bills
+    router.push('/add-bill');
   };
 
   return (
@@ -98,10 +91,10 @@ export default function SelectUserPage() {
       <div className="max-w-2xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
         <div className="bg-card rounded-xl shadow-lg p-6 mb-8 border">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">Who's uploading the bill?</h1>
-              <p className="text-muted-foreground">Select yourself or add a new person to get started</p>
-            </div>
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">Add all people</h1>
+            <p className="text-muted-foreground">Add all people who might upload bills or split bills</p>
+          </div>
             {people.length > 0 && (
               <button
                 onClick={async () => {
@@ -109,7 +102,6 @@ export default function SelectUserPage() {
                   if (confirmed) {
                     localStoragePeople.clearPeople();
                     setPeople([]);
-                    setSelectedPerson(null);
                   }
                 }}
                 className="px-4 py-2 border border-destructive text-destructive rounded-lg hover:bg-destructive/10 transition-colors"
@@ -138,12 +130,7 @@ export default function SelectUserPage() {
                   people.map((person) => (
                     <div
                       key={person.id}
-                      onClick={() => setSelectedPerson(person)}
-                      className={`flex items-center justify-between p-4 rounded-lg border-2 cursor-pointer transition-all ${
-                        selectedPerson?.id === person.id
-                          ? 'border-primary bg-primary/5'
-                          : 'border-border hover:border-muted-foreground/50 hover:bg-accent'
-                      }`}
+                      className="flex items-center justify-between p-4 rounded-lg border border-border bg-card hover:border-muted-foreground/50 hover:bg-accent/50 transition-all"
                     >
                       <div className="flex items-center space-x-3">
                         <div className="w-10 h-10 sm:w-12 sm:h-12 bg-muted rounded-full flex items-center justify-center">
@@ -159,10 +146,7 @@ export default function SelectUserPage() {
                         </div>
                       </div>
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deletePerson(person.id);
-                        }}
+                        onClick={() => deletePerson(person.id)}
                         className="text-destructive hover:text-destructive/80 p-2"
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -242,14 +226,14 @@ export default function SelectUserPage() {
         <div className="flex flex-col sm:flex-row justify-between space-y-4 sm:space-y-0 sm:space-x-4">
           <button
             onClick={handleContinue}
-            disabled={!selectedPerson || loading}
+            disabled={loading || people.length === 0}
             className={`w-full sm:w-auto px-6 py-3 rounded-md font-medium transition-colors ${
-              selectedPerson && !loading
+              !loading && people.length > 0
                 ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                 : 'bg-muted text-muted-foreground cursor-not-allowed'
             }`}
           >
-            Continue to Upload Bill
+            Continue to Upload Bills
           </button>
           <button
             onClick={() => router.push('/')}

@@ -126,8 +126,8 @@ export function calculateSettlement(people: Person[]): SettlementResult {
     const relevantBills = allBills.filter(bill => {
       // If this is their own bill, include it
       if (bill.personId === person.id) return true;
-      // If this is a custom split bill and they have a share, include it
-      if (bill.splitType === 'custom' && bill.personShares && bill.personShares[person.id]) return true;
+      // If this person has consumption share from this bill, include it
+      if (bill.personShares && bill.personShares[person.id] > 0) return true;
       // If this is an equal split bill, everyone participates
       if (bill.splitType !== 'custom') return true;
       return false;
