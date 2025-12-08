@@ -634,7 +634,7 @@ function SettlementPageContent() {
           {showDetails && (
             <div className="space-y-8 border-t pt-8">
               {/* People List */}
-              <div>
+              {/* <div>
                 <h2 className="text-xl font-semibold text-foreground mb-4">Participants:</h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {people.map((person) => (
@@ -652,7 +652,7 @@ function SettlementPageContent() {
                     </div>
                   ))}
                 </div>
-              </div>
+              </div> */}
 
               {/* Direct Bill (if any) */}
               {directBill && (
@@ -686,7 +686,7 @@ function SettlementPageContent() {
                   console.log('DEBUG - Settlement object:', settlement);
                   return null;
                 })()}
-                <h2 className="text-xl font-semibold text-foreground mb-4">1. Consumption Summary per Person</h2>
+                <h2 className="text-xl font-semibold text-foreground mb-4">Individual Consumption Summary</h2>
                 <p className="text-muted-foreground mb-4">Shows what each person consumed</p>
 
                 <div className="space-y-4">
@@ -800,12 +800,12 @@ function SettlementPageContent() {
                       );
                     });
                   })()}
-                  <div className="flex justify-between items-center p-3 bg-primary/10 rounded-lg mt-4">
+                  {/* <div className="flex justify-between items-center p-3 bg-primary/10 rounded-lg mt-4">
                     <span className="font-semibold text-foreground">Total =</span>
                     <span className="font-bold text-lg text-primary">
                       {formatCurrency(settlement.totalExpenses)}
                     </span>
-                  </div>
+                  </div> */}
                 </div>
               </div>
 
@@ -826,10 +826,11 @@ function SettlementPageContent() {
                 </div>
               </div> */}
 
-              {/* Individual Balances */}
+              {/* Individual Balances - Commented out by user request */}
+              {/*
               <div>
                 <h2 className="text-xl font-semibold text-foreground mb-4">
-                  2. Calculation of who should pay or receive
+                  2. Payment Settlement
                 </h2>
                 <p className="text-muted-foreground mb-4">Already paid:</p>
                 <div className="space-y-3">
@@ -865,6 +866,7 @@ function SettlementPageContent() {
                   ))}
                 </div>
               </div>
+              */}
             </div>
           )}
 
