@@ -31,6 +31,7 @@ function AddBillPageContent() {
   const [people, setPeople] = useState<Array<{id: string, name: string}>>([]);
   const [selectedOwner, setSelectedOwner] = useState<string>('');
   const [canProceed, setCanProceed] = useState(false);
+  const [billId, setBillId] = useState<string>('');
 
   useEffect(() => {
     // Load people from localStorage
@@ -102,8 +103,12 @@ function AddBillPageContent() {
 
     if (!ownerPerson) return null;
 
-    // Save bill to localStorage
+    // Save bill to localStorage with unique ID
+    const billId = `${ownerPerson.id}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    // Store billId for URL params
+    setBillId(billId);
     const bill = {
+      id: billId,
       personId: ownerPerson.id,
       personName: ownerPerson.name,
       items: items.map(item => ({
@@ -114,7 +119,8 @@ function AddBillPageContent() {
       tax: taxAmount,
       serviceCharge: serviceChargeAmount,
       total: totalBillAmount,
-      splitType: splitOption as 'equal' | 'custom'
+      splitType: splitOption as 'equal' | 'custom',
+      createdAt: new Date().toISOString()
     };
 
     localStorageBills.addBill(bill);
@@ -128,8 +134,8 @@ function AddBillPageContent() {
     setManualTax('');
     setManualServiceCharge('');
 
-    // Return bill data for navigation (don't navigate here)
-    return { items, taxAmount, serviceChargeAmount, ownerPerson };
+    // Return bill data AND billId for navigation (don't navigate here)
+    return { items, taxAmount, serviceChargeAmount, ownerPerson, billId };
   };
 
   const addManualItem = () => {
@@ -795,7 +801,8 @@ function AddBillPageContent() {
                           serviceCharge: billData.serviceChargeAmount.toString(),
                           userId: selectedOwner,
                           userName: billData.ownerPerson.name,
-                          splitOption: 'custom'
+                          splitOption: 'custom',
+                          billUniqueId: billData.billId // Use returned billId directly
                         });
                         console.log('DEBUG - Navigating to split page with params');
                         router.push(`/split?${params.toString()}`);
@@ -846,9 +853,15 @@ function AddBillPageContent() {
                 <button
                   type="button"
                   onClick={() => {
+                    // Force equal split option
+                    setSplitOption('equal');
                     const billData = handleContinue();
                     if (billData) {
-                      router.push('/settlement');
+                      const params = new URLSearchParams({
+                        splitOption: 'equal',
+                        billUniqueId: billId  // Use the already generated billId
+                      });
+                      router.push(`/settlement?${params.toString()}`);
                     }
                   }}
                   disabled={extractedItems.length === 0}

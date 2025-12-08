@@ -38,6 +38,7 @@ function SplitPageContent() {
   const [isAddingPerson, setIsAddingPerson] = useState(false);
   const [currentUser, setCurrentUser] = useState<{id: string, name: string} | null>(null);
   const [splitOption, setSplitOption] = useState<'equal' | 'custom' | null>(null);
+  const [billUniqueId, setBillUniqueId] = useState<string>('');
 
   // Predefined colors for people
   const colors = [
@@ -80,15 +81,21 @@ function SplitPageContent() {
     const userId = searchParams.get('userId');
     const userName = searchParams.get('userName');
     const splitOptionParam = searchParams.get('splitOption');
-    
+    const billUniqueIdParam = searchParams.get('billUniqueId');
+
     console.log('URL params:', {
       itemsParam,
       taxParam,
       serviceChargeParam,
       userId,
       userName,
-      splitOptionParam
+      splitOptionParam,
+      billUniqueIdParam
     });
+
+    if (billUniqueIdParam) {
+      setBillUniqueId(billUniqueIdParam);
+    }
     
     if (userId && userName) {
       setCurrentUser({ id: userId, name: decodeURIComponent(userName) });
@@ -245,29 +252,27 @@ function SplitPageContent() {
     // Custom split logic
     let share = 0;
     
-    // Calculate share of items
+    // Calculate share of items - ALL items are SHARED in custom split
     assignments.forEach(assignment => {
       if (assignment.personIds.includes(personId)) {
         const item = items.find(i => i.id === assignment.itemId);
         if (item) {
           const itemTotal = item.price * item.quantity;
-          if (assignment.isShared) {
-            share += itemTotal / assignment.personIds.length;
-          } else {
-            share += itemTotal;
-          }
+          // Always divide by number of assignees since custom split means sharing
+          share += itemTotal / assignment.personIds.length;
         }
       }
     });
     
-    // Calculate share of tax and service charge
+    // Calculate share of tax and service charge - use SAME divided amount
     const assignedItemsTotal = assignments
       .filter(a => a.personIds.includes(personId))
       .reduce((sum, assignment) => {
         const item = items.find(i => i.id === assignment.itemId);
         if (item) {
           const itemTotal = item.price * item.quantity;
-          return sum + (assignment.isShared ? itemTotal / assignment.personIds.length : itemTotal);
+          // Always use divided amount since all assignments are shared in custom split
+          return sum + (itemTotal / assignment.personIds.length);
         }
         return sum;
       }, 0);
@@ -321,6 +326,10 @@ function SplitPageContent() {
 
       console.log('DEBUG - Final personShares:', personShares);
 
+      // IMPORTANT: Use billUniqueId directly from URL params - no modifications!
+      // This must be the EXACT same ID used in add-bill page bill.id
+      console.log('DEBUG - billUniqueId from URL params:', billUniqueId);
+
       // Create a summary of the split with item assignments
       const splitSummary = {
         id: Date.now().toString(),
@@ -329,6 +338,7 @@ function SplitPageContent() {
         tax: tax || 0,
         serviceCharge: serviceCharge || 0,
         splitType: splitOption || 'equal',
+        billUniqueId: billUniqueId, // Use directly from URL params
         people: people.map(person => ({
           id: person.id,
           name: person.name,
@@ -353,7 +363,11 @@ function SplitPageContent() {
         }
       };
 
-      console.log('DEBUG - Split summary to save:', splitSummary);
+      console.log('DEBUG - Split summary to save:', {
+        ...splitSummary,
+        billUniqueId: splitSummary.billUniqueId,
+        createdBy: splitSummary.createdBy
+      });
 
       // Save to localStorage with custom split information
       const savedSplits = JSON.parse(localStorage.getItem('savedSplits') || '[]');

@@ -166,7 +166,9 @@ function SettlementPageContent() {
         const serviceChargeParam = searchParams.get('serviceCharge');
         const userId = searchParams.get('userId');
         const userName = searchParams.get('userName');
-        
+        const splitOptionParam = searchParams.get('splitOption');
+        const billUniqueIdParam = searchParams.get('billUniqueId');
+
         if (itemsParam && userId && userName) {
           // Direct settlement from upload/edit/split
           console.log('Processing direct settlement from URL params');
@@ -233,6 +235,70 @@ function SettlementPageContent() {
             }
           } catch (error) {
             console.error('Error processing direct settlement:', error);
+          }
+        } else if (splitOptionParam === 'equal' && billUniqueIdParam) {
+          // Handle equal split navigation directly to settlement
+          console.log('Processing equal split settlement from URL params');
+
+          // Clear old savedSplits to start fresh settlement session
+          localStorage.setItem('savedSplits', '[]');
+          console.log('DEBUG - Cleared savedSplits for fresh equal settlement session');
+
+          try {
+            // Get all people from localStorage
+            const savedPeople = localStoragePeople.getPeople();
+            if (savedPeople.length === 0) {
+              router.push('/');
+              return;
+            }
+
+            setPeople(savedPeople);
+
+            // For equal split, we don't have bill data from URL, but we can get from localStorage bills
+            // Find the bill with the matching billUniqueId
+            const allBills = localStorageBills.getBills();
+            const matchingBill = allBills.find((bill: any) => bill.id === billUniqueIdParam);
+
+            if (matchingBill) {
+              console.log('DEBUG - Found matching bill for equal settlement:', matchingBill);
+
+              const total = matchingBill.total;
+
+              // Create equal split summary for savedSplits
+              const equalSplitSummary = {
+                id: Date.now().toString(),
+                date: new Date().toISOString(),
+                total: total,
+                tax: matchingBill.tax || 0,
+                serviceCharge: matchingBill.serviceCharge || 0,
+                splitType: 'equal',
+                billUniqueId: billUniqueIdParam,
+                people: savedPeople.map((person: any) => ({
+                  id: person.id,
+                  name: person.name,
+                  amount: total / savedPeople.length,
+                  items: [] // Equal split - no specific item assignments
+                })),
+                createdBy: {
+                  id: matchingBill.personId,
+                  name: matchingBill.personName
+                }
+              };
+
+              const savedSplits = JSON.parse(localStorage.getItem('savedSplits') || '[]');
+              savedSplits.push(equalSplitSummary);
+              localStorage.setItem('savedSplits', JSON.stringify(savedSplits));
+              console.log('DEBUG - Saved equal split summary');
+
+              // Calculate settlement
+              const settlementData = calculateSettlement(savedPeople);
+              setSettlement(settlementData);
+
+            } else {
+              console.error('Bill not found for billUniqueId:', billUniqueIdParam);
+            }
+          } catch (error) {
+            console.error('Error processing equal split settlement:', error);
           }
         } else {
           // Regular settlement from localStorage
@@ -695,96 +761,97 @@ function SettlementPageContent() {
                     const savedSplits = JSON.parse(localStorage.getItem('savedSplits') || '[]');
 
                     return settlement.personExpenses.map((expense: any) => {
-                      // Enhanced consumption summary: combine custom item assignments + equal sharing
-                      let itemDescriptions: string[] = [];
+                      // Get person's consumption from split data directly - NO BILL-BY-BILL ITERATION
+                      let personItems: string[] = [];
                       let totalEqualSharing = 0;
+                      let hasCustomItems = false;
 
-                      // Process ALL bills this person participated in for better aggregation
-                      console.log('DEBUG - Processing consumption for', expense.person.name, 'across all bills');
+                      console.log('DEBUG - Processing consumption for', expense.person.name);
 
-                      // Get all bills this person has consumption in
-                      expense.bills.forEach((bill: any) => {
-                        console.log('DEBUG - Processing bill:', bill.id, 'for person:', expense.person.name);
+                      // Find recent splits for this person (last 15 minutes)
+                      const recentSplits = savedSplits.filter((split: any) => {
+                        const splitTime = new Date(split.date).getTime();
+                        const fifteenMinutesAgo = Date.now() - 900000; // 15 minutes
+                        const isRecent = splitTime >= fifteenMinutesAgo;
 
-                        // Check if this bill has detailed item assignments (custom split)
-                        const matchingSplit = savedSplits.find((split: any) => {
-                          // Time-based matching for recent transactions (15 minutes - more realistic for user flow)
-                          const splitTime = new Date(split.date).getTime();
-                          const fifteenMinutesAgo = Date.now() - 900000; // 15 minutes
-                          const isRecent = splitTime >= fifteenMinutesAgo;
+                        // Match by person's participation in split
+                        const personInSplit = split.people?.some((p: any) => p.id === expense.person.id);
+                        const creatorMatch = split.createdBy?.id === expense.person.id;
 
-                          // Fallback matching criteria for robustness
-                          const creatorMatches = split.createdBy?.id === bill.personId ||
-                                                  split.createdBy?.name === bill.personName;
-                          const personMatches = split.people?.some((p: any) => p.id === expense.person.id ||
-                                                                        p.name === expense.person.name);
+                        return isRecent && (personInSplit || creatorMatch);
+                      });
 
-                          console.log('DEBUG - Checking split match for bill:', bill.id);
-                          console.log('  - Split ID:', split.id, 'Type:', split.splitType);
-                          console.log('  - Creator matches:', creatorMatches, '(split.createdBy:',
-                            JSON.stringify(split.createdBy), 'vs bill.person:', bill.personId, bill.personName);
-                          console.log('  - Person matches:', personMatches, '(expense.person.id:', expense.person.id,
-                            'expense.person.name:', expense.person.name, 'split.people:', split.people?.map((p: {name: string; id: string}) => `${p.name}(${p.id})`));
-                          console.log('  - Time check:', isRecent, '(split time:', new Date(split.date), 'current time:', new Date());
+                      console.log('DEBUG - Found', recentSplits.length, 'recent splits for', expense.person.name);
 
-                          return split.splitType === 'custom' &&
-                                 creatorMatches &&
-                                 personMatches &&
-                                 isRecent;
-                        });
+                      // Calculate total custom costs from split data
+                      let totalCustomCosts = 0;
 
-                        if (matchingSplit) {
-                          // This bill has custom split with detailed item assignments
-                          console.log('DEBUG - Found matching custom split for bill:', bill.id);
-                          const personData = matchingSplit.people?.find((p: any) => p.id === expense.person.id);
-                          if (personData && personData.items && personData.items.length > 0) {
-                            // Aggregate item-specific consumption
-                            const seenItems = new Set<string>();
-                            personData.items.forEach((item: any) => {
-                              const itemKey = `${item.name}-${item.price}`;
-                              if (!seenItems.has(itemKey)) {
-                                seenItems.add(itemKey);
-                                // Show individual item cost (not multiplied by quantity)
-                                itemDescriptions.push(`${item.name} ${formatCurrency(item.price)}`);
-                                console.log('DEBUG - Added item:', `${item.name} ${formatCurrency(item.price)}`);
-                              }
-                            });
+                      // Aggregate from ALL recent splits for this person
+                      recentSplits.forEach((split: any) => {
+                        const personInSplit = split.people?.find((p: any) => p.id === expense.person.id);
+
+                        if (personInSplit) {
+                          console.log('DEBUG - Person is in split, amount:', personInSplit.amount);
+
+                          if (split.splitType === 'custom') {
+                            // Custom split: get specific items this person was assigned
+                            if (personInSplit.items && personInSplit.items.length > 0) {
+                              hasCustomItems = true;
+                              personInSplit.items.forEach((item: any) => {
+                                const itemDesc = `${item.name} ${formatCurrency(item.price)}`;
+                                if (!personItems.includes(itemDesc)) {
+                                  personItems.push(itemDesc);
+                                  console.log('DEBUG - Added custom item:', itemDesc);
+                                  // Track the amount for this item
+                                  totalCustomCosts += item.price;
+                                }
+                              });
+                            } else {
+                              // Custom split but no item assignments - count as equal sharing
+                              totalEqualSharing += personInSplit.amount;
+                              console.log('DEBUG - Custom split but no items, added to equal sharing:', personInSplit.amount);
+                            }
                           } else {
-                            // Custom split but no specific item data - treat as equal sharing
-                            totalEqualSharing += bill.consumptionShare;
-                            console.log('DEBUG - Custom split without item data, adding to sharing:', bill.consumptionShare);
+                            // Equal split: all persons share equally
+                            totalEqualSharing += personInSplit.amount;
+                            console.log('DEBUG - Equal split added:', personInSplit.amount);
                           }
                         } else {
-                          // No custom split match - this is equal split bill
-                          // Add to equal sharing amount
-                          totalEqualSharing += bill.consumptionShare;
-                          console.log('DEBUG - Equal split bill detected, adding to sharing:', bill.consumptionShare);
+                          console.log('DEBUG - Person not found in split data');
                         }
                       });
 
+                      // If we have custom items, calculate equal sharing as: total consumption - custom item costs
+                      if (totalCustomCosts > 0) {
+                        const calculatedEqualSharing = expense.consumption - totalCustomCosts;
+                        if (calculatedEqualSharing > 0) {
+                          totalEqualSharing = calculatedEqualSharing;
+                          console.log('DEBUG - Calculated equal sharing from total consumption:',
+                            expense.consumption, '-', totalCustomCosts, '=', totalEqualSharing);
+                        }
+                      }
+
                       console.log('DEBUG - Final consumption for', expense.person.name, ':');
-                      console.log('  - Item descriptions:', itemDescriptions);
+                      console.log('  - Custom items:', personItems);
                       console.log('  - Equal sharing:', totalEqualSharing);
+                      console.log('  - Has custom items:', hasCustomItems);
 
-                      // Format the combined consumption description
-                      let consumptionParts: string[] = [];
-
-                      // Add item-specific consumption (from custom splits)
-                      if (itemDescriptions.length > 0) {
-                        consumptionParts.push(`paid for ${itemDescriptions.join(', ')}`);
-                      }
-
-                      // Add equal sharing if any
-                      if (totalEqualSharing > 0) {
-                        consumptionParts.push(`sharing ${formatCurrency(totalEqualSharing)}`);
-                      }
-
+                      // Format the consumption description
                       let consumptionDescription: string;
-                      if (consumptionParts.length > 0) {
-                        consumptionDescription = consumptionParts.join(', ');
+
+                      if (personItems.length > 0) {
+                        // Has specific items - show item consumption
+                        consumptionDescription = `paid for ${personItems.join(', ')}`;
+                        // If also has equal sharing, append it
+                        if (totalEqualSharing > 0) {
+                          consumptionDescription += `, sharing ${formatCurrency(totalEqualSharing)}`;
+                        }
+                      } else if (totalEqualSharing > 0) {
+                        // No specific items - show equal sharing
+                        consumptionDescription = `sharing ${formatCurrency(totalEqualSharing)}`;
                       } else if (expense.consumption > 0) {
-                        // Fallback if something went wrong with bill analysis
-                        consumptionDescription = `consumed ${formatCurrency(expense.consumption)}`;
+                        // No custom items but has consumption = equal sharing
+                        consumptionDescription = `sharing ${formatCurrency(expense.consumption)}`;
                       } else {
                         consumptionDescription = 'consumed nothing';
                       }

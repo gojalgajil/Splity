@@ -102,17 +102,21 @@ export function calculateSettlement(people: Person[]): SettlementResult {
     let amountFronted = personBills.reduce((sum, bill) => sum + bill.total, 0);
     console.log(`Amount fronted by ${person.name}: ${amountFronted}`);
 
-    // Consumption: calculate from all bills they participate in
+    // Consumption: calculate ONLY from bills where this person is assigned/located
     let consumption = 0;
     allBills.forEach(bill => {
       if (bill.splitType === 'custom' && bill.personShares) {
-        // Custom split: use the person's share
-        consumption += bill.personShares[person.id] || 0;
-        console.log(`Custom bill ${bill.id}: ${person.name} consumption += ${bill.personShares[person.id] || 0}`);
+        // Custom split: ONLY if this person actually has an assignment in this bill
+        if (bill.personShares[person.id] && bill.personShares[person.id] > 0) {
+          consumption += bill.personShares[person.id];
+          console.log(`Custom bill ${bill.id}: ${person.name} assigned consumption += ${bill.personShares[person.id]}`);
+        } else {
+          console.log(`Custom bill ${bill.id}: ${person.name} not assigned, skip (${person.id} not in personShares)`);
+        }
       } else if (bill.splitType !== 'custom') {
         // Equal split: everyone gets equal share
         consumption += bill.total / people.length;
-        console.log(`Equal bill ${bill.id}: ${person.name} consumption += ${bill.total / people.length}`);
+        console.log(`Equal bill ${bill.id}: ${person.name} equal consumption += ${bill.total / people.length}`);
       }
     });
 
@@ -152,6 +156,7 @@ export function calculateSettlement(people: Person[]): SettlementResult {
           total: bill.total,
           createdAt: bill.createdAt,
           consumptionShare: consumptionShare,
+          personId: bill.personId || '', // Ensure personId is included
           personName: bill.personName || '',
           items: bill.items || []
         };
