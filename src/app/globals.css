@@ -2,6 +2,32 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Mobile-friendly scrollbar styling */
+.max-h-64::-webkit-scrollbar {
+  width: 6px !important;
+  height: 6px !important;
+}
+
+.max-h-64::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05) !important;
+  border-radius: 3px !important;
+}
+
+.max-h-64::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.3) !important;
+  border-radius: 3px !important;
+}
+
+.max-h-64::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Firefox scrollbar support */
+.max-h-64 {
+  scrollbar-width: thin !important;
+  scrollbar-color: rgba(0, 0, 0, 0.3) rgba(0, 0, 0, 0.05) !important;
+}
+
 /* --- Clean Professional Theme (shadcn default) --- */
 
 @layer base {

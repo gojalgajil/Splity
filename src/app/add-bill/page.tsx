@@ -583,12 +583,13 @@ function AddBillPageContent() {
               <h3 className="font-medium mb-2 text-foreground">
                 Items:
               </h3>
-              <div
-                className="max-h-64 overflow-y-auto mb-4 scrollbar-thin scrollbar-thumb-current scrollbar-track-transparent scrollbar-thumb-opacity-40 scrollbar-rounded"
-                style={{
-                  scrollbarColor: 'currentColor transparent'
-                }}
-              >
+              <div className="relative">
+                <div
+                  className="max-h-64 overflow-y-auto mb-4 scrollbar-thin scrollbar-thumb-current scrollbar-track-transparent scrollbar-thumb-opacity-40 scrollbar-rounded"
+                  style={{
+                    scrollbarColor: 'currentColor transparent'
+                  }}
+                >
                 <table className="min-w-full divide-y divide-border md:table">
                   <thead className="hidden md:table-header-group">
                     <tr>
@@ -684,8 +685,18 @@ function AddBillPageContent() {
                 </table>
               </div>
 
-              {/* Add Item Button */}
-              <div className="flex justify-end mb-4">
+              {/* Scroll Indicator Icon */}
+              {extractedItems.length > 5 && (
+                <div className="absolute right-2 top-2 w-6 h-6 bg-primary/20 rounded-full flex items-center justify-center animate-pulse">
+                  <svg className="w-4 h-4 text-primary animate-bounce" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                  </svg>
+                </div>
+              )}
+            </div>
+
+            {/* Add Item Button */}
+            <div className="flex justify-end mb-4">
                 <button
                   onClick={() => {
                     const newItem = {
