@@ -6,8 +6,8 @@ import { ThemeProvider } from '@/components/providers';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Split Bill - Easy Bill Splitting with OCR',
-  description: 'Split bills easily by scanning receipts with OCR and sharing via WhatsApp',
+  title: 'Splity - Easy Bill Splitting',
+  description: 'Upload multiple bills, split them with different methods, and share the results with your friends.',
 };
 
 export default function RootLayout({
