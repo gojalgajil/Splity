@@ -33,6 +33,9 @@ function SettlementPageContent() {
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [showConsumptionImage, setShowConsumptionImage] = useState(false);
   const consumptionImageRef = useRef<HTMLDivElement>(null);
+  const [showPersonImage, setShowPersonImage] = useState(false);
+  const personImageRef = useRef<HTMLDivElement>(null);
+  const [personImageData, setPersonImageData] = useState<{name: string, description: string} | null>(null);
 
   const copyToClipboard = async (text: string) => {
     try {
@@ -1158,8 +1161,87 @@ function SettlementPageContent() {
 
                       return (
                         <div key={expense.person.id} className="p-4 bg-muted/50 rounded-lg">
-                          <div className="text-sm text-muted-foreground">
+                          <div className="text-sm text-muted-foreground mb-2">
                             <span className="font-semibold text-foreground">{expense.person.name}</span>: {consumptionDescription}
+                          </div>
+                          <div className="flex justify-end space-x-1">
+                            <button
+                              onClick={() => copyToClipboard(`${expense.person.name}: ${consumptionDescription}`)}
+                              className="p-1 rounded-full hover:bg-accent/30 transition-colors"
+                              title={`Copy ${expense.person.name}'s consumption`}
+                              aria-label={`Copy ${expense.person.name}'s consumption`}
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground">
+                                <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>
+                                <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
+                              </svg>
+                            </button>
+                            <button
+                              onClick={async () => {
+                                if (isGeneratingImage) return;
+
+                                setIsGeneratingImage(true);
+                                setShowPersonImage(true);
+                                setPersonImageData({
+                                  name: expense.person.name,
+                                  description: consumptionDescription
+                                });
+
+                                await new Promise(resolve => setTimeout(resolve, 100));
+
+                                try {
+                                  if (!personImageRef.current) throw new Error('Person image element not found');
+
+                                  const dataUrl = await toPng(personImageRef.current, {
+                                    backgroundColor: '#ffffff',
+                                    quality: 1,
+                                    cacheBust: true,
+                                  });
+
+                                  if (navigator.share) {
+                                    try {
+                                      const response = await fetch(dataUrl);
+                                      const blob = await response.blob();
+                                      const file = new File([blob], `${expense.person.name}-consumption.png`, { type: 'image/png' });
+
+                                      await navigator.share({
+                                        files: [file],
+                                        title: `${expense.person.name}'s Consumption`,
+                                        text: `Check out ${expense.person.name}'s consumption`,
+                                      });
+                                      return;
+                                    } catch (shareError) {
+                                      console.log('Native sharing failed, falling back to download', shareError);
+                                    }
+                                  }
+
+                                  const link = document.createElement('a');
+                                  link.download = `${expense.person.name}-consumption-${new Date().toISOString().split('T')[0]}.png`;
+                                  link.href = dataUrl;
+                                  document.body.appendChild(link);
+                                  link.click();
+                                  document.body.removeChild(link);
+
+                                } catch (error) {
+                                  console.error('Error generating person consumption image:', error);
+                                  alert(`Failed to generate ${expense.person.name}'s consumption image. Please try again.`);
+                                } finally {
+                                  setIsGeneratingImage(false);
+                                  setShowPersonImage(false);
+                                  setPersonImageData(null);
+                                }
+                              }}
+                              className="p-1 rounded-full hover:bg-accent/30 transition-colors"
+                              title={`Share ${expense.person.name}'s consumption as image`}
+                              aria-label={`Share ${expense.person.name}'s consumption as image`}
+                              disabled={isGeneratingImage}
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground">
+                                <path d="M15 3h6v6"/>
+                                <path d="M10 14 21 3"/>
+                                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                              </svg>
+                            </button>
                           </div>
                         </div>
                       );
@@ -1249,6 +1331,58 @@ function SettlementPageContent() {
             >
               Clear All & Start Over
             </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Hidden element for person consumption image generation */}
+      <div style={{ position: 'fixed', left: '-9999px', visibility: showPersonImage ? 'visible' : 'hidden' }}>
+        <div
+          ref={personImageRef}
+          style={{
+            width: '300px',
+            padding: '24px',
+            backgroundColor: 'white',
+            color: 'black',
+            fontFamily: 'Arial, sans-serif',
+            borderRadius: '12px',
+            boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+          }}
+        >
+          <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+            <h1 style={{
+              fontSize: '20px',
+              fontWeight: 'bold',
+              color: '#1f2937',
+              marginBottom: '8px'
+            }}>
+              {personImageData?.name}'s Consumption
+            </h1>
+            <p style={{
+              fontSize: '16px',
+              color: '#059669',
+              fontWeight: '500'
+            }}>
+              {personImageData?.description}
+            </p>
+          </div>
+
+          <div style={{
+            marginTop: '16px',
+            paddingTop: '12px',
+            borderTop: '1px solid #e5e7eb',
+            color: '#9ca3af',
+            fontSize: '10px',
+            textAlign: 'center'
+          }}>
+            <div>Generated on {new Date().toLocaleDateString('id-ID', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit'
+            })}</div>
+            <div style={{ marginTop: '2px' }}>Splity App</div>
           </div>
         </div>
       </div>
