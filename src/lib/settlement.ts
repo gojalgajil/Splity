@@ -265,5 +265,5 @@ export function calculateSettlement(people: Person[]): SettlementResult {
 }
 
 export function formatCurrency(amount: number): string {
-  return `Rp ${amount.toLocaleString('id-ID')}`;
+  return `Rp${amount.toLocaleString('id-ID')}`;
 }

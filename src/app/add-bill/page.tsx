@@ -32,6 +32,8 @@ function AddBillPageContent() {
   const [selectedOwner, setSelectedOwner] = useState<string>('');
   const [canProceed, setCanProceed] = useState(false);
   const [billId, setBillId] = useState<string>('');
+  const [ownerError, setOwnerError] = useState(false);
+  const ownerSectionRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // Load people from localStorage
@@ -48,7 +50,23 @@ function AddBillPageContent() {
   // Update canProceed when owner is selected
   useEffect(() => {
     setCanProceed(selectedOwner !== '');
+    if (selectedOwner !== '') {
+      setOwnerError(false);
+    }
   }, [selectedOwner]);
+
+  // Function to validate owner selection and scroll to owner section
+  const validateOwnerAndScroll = () => {
+    if (selectedOwner === '') {
+      setOwnerError(true);
+      ownerSectionRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center'
+      });
+      return false;
+    }
+    return true;
+  };
 
   const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -78,8 +96,6 @@ function AddBillPageContent() {
   }, []);
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!canProceed) return;
-
     const file = e.target.files?.[0];
     if (file && file.type.startsWith('image/')) {
       const reader = new FileReader();
@@ -88,6 +104,15 @@ function AddBillPageContent() {
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  const handleUploadClick = (e: React.MouseEvent) => {
+    if (!validateOwnerAndScroll()) {
+      e.preventDefault(); // Prevent file dialog from opening when validation fails
+      // Error message already shown by validateOwnerAndScroll
+      return;
+    }
+    // If validation passes, the file input onChange will handle the file
   };
 
   const handleContinue = () => {
@@ -330,7 +355,7 @@ function AddBillPageContent() {
       <Navbar />
       <div className="max-w-2xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
         {/* Owner Selection Header */}
-        <div className="bg-card rounded-xl shadow-lg p-4 mb-6 border">
+        <div ref={ownerSectionRef} className="bg-card rounded-xl shadow-lg p-4 mb-6 border">
           <h2 className="text-lg font-semibold text-foreground mb-3">Uploading bill as:</h2>
           <select
             value={selectedOwner}
@@ -344,8 +369,8 @@ function AddBillPageContent() {
               </option>
             ))}
           </select>
-          {!canProceed && (
-            <p className="text-sm text-destructive mt-1">Please select a bill owner to continue</p>
+          {ownerError && (
+            <p className="text-sm text-destructive mt-1">Please select a bill owner first</p>
           )}
         </div>
 
@@ -365,7 +390,11 @@ function AddBillPageContent() {
               📷 Upload Image
             </button>
             <button
-              onClick={() => setInputMode('manual')}
+              onClick={() => {
+                if (validateOwnerAndScroll()) {
+                  setInputMode('manual');
+                }
+              }}
               className={`flex-1 px-4 py-3 rounded-lg font-medium transition-colors ${
                 inputMode === 'manual'
                   ? 'bg-primary text-primary-foreground'
@@ -381,13 +410,11 @@ function AddBillPageContent() {
               {!image ? (
                 <div
                   className={`border-2 border-dashed rounded-lg p-12 text-center cursor-pointer transition-colors ${
-                    canProceed
-                      ? (isDragging ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50')
-                      : 'border-muted cursor-not-allowed opacity-50'
+                    isDragging ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
                   }`}
-                  onDragOver={canProceed ? handleDragOver : undefined}
-                  onDragLeave={canProceed ? handleDragLeave : undefined}
-                  onDrop={canProceed ? handleDrop : undefined}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
                 >
                   <div className="space-y-4">
                     <svg
@@ -408,7 +435,7 @@ function AddBillPageContent() {
                     </p>
                     <p className="text-sm text-muted-foreground">or</p>
                     <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                      <label className={`px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 cursor-pointer transition-colors text-center ${!canProceed ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                      <label className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 cursor-pointer transition-colors text-center" onClick={handleUploadClick}>
                         📷 Take Photo
                         <input
                           type="file"
@@ -416,17 +443,15 @@ function AddBillPageContent() {
                           accept="image/*"
                           capture="environment"
                           onChange={handleFileInput}
-                          disabled={!canProceed}
                         />
                       </label>
-                      <label className={`px-4 py-2 bg-muted text-muted-foreground hover:bg-accent cursor-pointer transition-colors rounded-md text-center ${!canProceed ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                      <label className="px-4 py-2 bg-muted text-muted-foreground hover:bg-accent cursor-pointer transition-colors rounded-md text-center" onClick={handleUploadClick}>
                         📸 Select from Gallery
                         <input
                           type="file"
                           className="hidden"
                           accept="image/*"
                           onChange={handleFileInput}
-                          disabled={!canProceed}
                         />
                       </label>
                     </div>

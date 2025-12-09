@@ -44,9 +44,9 @@ function SettlementPageContent() {
 
   const handleSharePaymentImage = async (from: string, to: string, amount: number) => {
     if (isGeneratingImage) return;
-
+    
     setIsGeneratingImage(true);
-
+    
     try {
       const tempDiv = document.createElement('div');
       tempDiv.style.position = 'fixed';
@@ -62,20 +62,20 @@ function SettlementPageContent() {
       tempDiv.style.borderRadius = '12px';
       tempDiv.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
       tempDiv.style.fontFamily = 'Arial, sans-serif';
-
+      
       const text = `${from} → ${to}\n${formatCurrency(amount)}`;
-
+      
       tempDiv.innerHTML = `
   <div style="text-align: center; padding: 16px;">
     <div style="font-size: 18px; font-weight: 600; margin-bottom: 8px; white-space: pre-line;">
       ${text.replace(/\n/g, '<br>')}
     </div>
     <div style="
-      margin-top: 24px;
-      padding-top: 16px;
-      border-top: 1px solid #e5e7eb;
-      color: #9ca3af;
-      font-size: 8px;
+      margin-top: 24px; 
+      padding-top: 16px; 
+      border-top: 1px solid #e5e7eb; 
+      color: #9ca3af; 
+      font-size: 8px; 
       text-align: center;
     ">
       <div>Generated on ${new Date().toLocaleDateString('id-ID', {
@@ -89,13 +89,13 @@ function SettlementPageContent() {
     </div>
   </div>
 `;
-
+      
       document.body.appendChild(tempDiv);
-
+      
       try {
         tempDiv.style.visibility = 'visible';
         await new Promise(resolve => setTimeout(resolve, 100));
-
+        
         const dataUrl = await toPng(tempDiv, {
           backgroundColor: '#ffffff',
           quality: 1,
@@ -108,7 +108,7 @@ function SettlementPageContent() {
             const response = await fetch(dataUrl);
             const blob = await response.blob();
             const file = new File([blob], 'payment.png', { type: 'image/png' });
-
+            
             await navigator.share({
               files: [file],
               title: 'Payment Details',
@@ -119,14 +119,14 @@ function SettlementPageContent() {
             console.log('Native sharing failed, falling back to download', shareError);
           }
         }
-
+        
         const link = document.createElement('a');
         link.download = `payment-${from}-to-${to}.png`;
         link.href = dataUrl;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-
+        
       } catch (error) {
         console.error('Error generating image:', error);
         alert('Failed to generate image. Please try again.');
@@ -147,19 +147,19 @@ function SettlementPageContent() {
       try {
         // Clean up invalid bills first
         const allBills = localStorageBills.getBills();
-        const invalidBills = allBills.filter(bill =>
-          !bill.items ||
-          !Array.isArray(bill.items) ||
+        const invalidBills = allBills.filter(bill => 
+          !bill.items || 
+          !Array.isArray(bill.items) || 
           bill.items.length === 0
         );
-
+        
         if (invalidBills.length > 0) {
           console.log('Found invalid bills, cleaning up:', invalidBills);
           invalidBills.forEach(bill => {
             localStorageBills.deleteBill(bill.id);
           });
         }
-
+        
         // Check if this is a direct settlement from URL parameters
         const itemsParam = searchParams.get('items');
         const taxParam = searchParams.get('tax');
@@ -181,16 +181,16 @@ function SettlementPageContent() {
             const items = JSON.parse(itemsParam);
             const tax = taxParam === 'null' ? null : (taxParam ? parseFloat(taxParam) : null);
             const serviceCharge = serviceChargeParam === 'null' ? null : (serviceChargeParam ? parseFloat(serviceChargeParam) : null);
-
+            
             // Get all people from localStorage
             const savedPeople = localStoragePeople.getPeople();
             if (savedPeople.length === 0) {
               router.push('/');
               return;
             }
-
+            
             setPeople(savedPeople);
-
+            
             // Create a temporary bill structure for display with edit/delete
             const currentUser = savedPeople.find(p => p.id === userId);
             if (currentUser) {
@@ -210,9 +210,9 @@ function SettlementPageContent() {
                 createdAt: new Date().toISOString(),
                 isTemporary: true
               };
-
+              
               setDirectBill(tempBill);
-
+              
               // Add to localStorage for settlement calculation (without id and createdAt as they're generated automatically)
               const billForStorage = {
                 personId: userId,
@@ -228,7 +228,7 @@ function SettlementPageContent() {
                 total: items.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0) + (tax || 0) + (serviceCharge || 0)
               };
               localStorageBills.addBill(billForStorage);
-
+              
               // Calculate settlement
               const settlementData = calculateSettlement(savedPeople);
               setSettlement(settlementData);
@@ -307,7 +307,7 @@ function SettlementPageContent() {
             router.push('/');
             return;
           }
-
+          
         setPeople(savedPeople);
         // Clear savedSplits if there are no bills to prevent showing stale data
         if (allBills.length === 0) {
@@ -397,7 +397,7 @@ function SettlementPageContent() {
       alert('This bill cannot be edited because it has no items. You may need to delete it and create a new one.');
       return;
     }
-
+    
     // Navigate to edit page with bill data
     const params = new URLSearchParams();
     params.set('items', JSON.stringify(bill.items.map((item: any) => ({
@@ -407,23 +407,23 @@ function SettlementPageContent() {
     params.set('tax', bill.tax?.toString() || 'null');
     params.set('serviceCharge', bill.serviceCharge?.toString() || 'null');
     params.set('billId', bill.id);
-
+    
     // Include custom split data if present
     if (bill.splitType === 'custom' && bill.personShares) {
       params.set('splitType', 'custom');
       params.set('personShares', JSON.stringify(bill.personShares));
     }
-
+    
     router.push(`/edit?${params.toString()}`);
   };
 
   const getShareText = () => {
     if (!settlement) return '';
-
+    
     let text = `Total Bill\n`;
     text += `${formatCurrency(settlement.totalExpenses)}\n`;
     text += `Split between ${people.length} people\n`;
-
+    
     if (settlement.settlements.length > 0) {
       text += 'Payment Actions:\n\n';
       settlement.settlements.forEach((s: any) => {
@@ -431,7 +431,7 @@ function SettlementPageContent() {
         text += `${formatCurrency(s.amount)}\n\n`;
       });
     }
-
+    
     return text;
   };
 
@@ -470,16 +470,16 @@ function SettlementPageContent() {
 
   const handleShareAsImage = async () => {
     if (isGeneratingImage || !settlement) return;
-
+    
     setIsGeneratingImage(true);
     setShowShareImage(true);
-
+    
     // Small delay to ensure the image is rendered before capture
     await new Promise(resolve => setTimeout(resolve, 100));
-
+    
     try {
       if (!imageRef.current) throw new Error('Image element not found');
-
+      
       const dataUrl = await toPng(imageRef.current, {
         backgroundColor: '#ffffff',
         quality: 1,
@@ -490,14 +490,14 @@ function SettlementPageContent() {
       const link = document.createElement('a');
       link.download = `bill-settlement-${new Date().toISOString().split('T')[0]}.png`;
       link.href = dataUrl;
-
+      
       // Try to share on mobile first
       if (navigator.share) {
         try {
           const response = await fetch(dataUrl);
           const blob = await response.blob();
           const file = new File([blob], 'bill-settlement.png', { type: 'image/png' });
-
+          
           await navigator.share({
             files: [file],
             title: 'Bill Settlement',
@@ -508,12 +508,12 @@ function SettlementPageContent() {
           console.log('Native sharing failed, falling back to download', shareError);
         }
       }
-
+      
       // Fallback to download
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-
+      
     } catch (error) {
       console.error('Error generating image:', error);
       alert('Failed to generate image. Please try again.');
@@ -562,7 +562,7 @@ function SettlementPageContent() {
                 aria-label="Copy settlement details to clipboard"
                 disabled={isGeneratingImage}
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-copy-icon lucide-copy"><rect width="14" height="14" x="8" y="8" rx="2 ry" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-copy-icon lucide-copy"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
               </button>
               <button
                 onClick={handleShareAsImage}
@@ -797,34 +797,13 @@ function SettlementPageContent() {
                             // Custom split: get specific items this person was assigned
                             if (personInSplit.items && personInSplit.items.length > 0) {
                               hasCustomItems = true;
-
-                              // First, create a map of item counts (how many people have each item)
-                              const itemCounts: {[key: string]: number} = {};
-
-                              // Iterate through all people in the split to count item usage
-                              split.people.forEach((p: any) => {
-                                if (p.items && p.items.length > 0) {
-                                  p.items.forEach((item: any) => {
-                                    const key = `${item.name}_${item.price}`;
-                                    if (!itemCounts[key]) {
-                                      itemCounts[key] = 0;
-                                    }
-                                    itemCounts[key]++;
-                                  });
-                                }
-                              });
-
                               personInSplit.items.forEach((item: any) => {
-                                const key = `${item.name}_${item.price}`;
-                                const count = itemCounts[key] || 1;
-                                const splitPrice = item.price / count;
-
-                                const itemDesc = `${item.name} ${formatCurrency(splitPrice)}`;
+                                const itemDesc = `${item.name} ${formatCurrency(item.price)}`;
                                 if (!personItems.includes(itemDesc)) {
                                   personItems.push(itemDesc);
                                   console.log('DEBUG - Added custom item:', itemDesc);
                                   // Track the amount for this item
-                                  totalCustomCosts += splitPrice;
+                                  totalCustomCosts += item.price;
                                 }
                               });
                             } else {
@@ -915,7 +894,7 @@ function SettlementPageContent() {
               </div> */}
 
               {/* Individual Balances - Commented out by user request */}
-
+              
               <div>
                 <h2 className="text-xl font-semibold text-foreground mb-4">
                 Payment Settlement
@@ -954,7 +933,7 @@ function SettlementPageContent() {
                   ))}
                 </div>
               </div>
-
+             
             </div>
           )}
 
@@ -975,7 +954,7 @@ function SettlementPageContent() {
           </div>
         </div>
       </div>
-
+      
       {/* Hidden element for image generation */}
       <div style={{ position: 'fixed', left: '-9999px', visibility: showShareImage ? 'visible' : 'hidden' }}>
         <div
@@ -999,9 +978,9 @@ function SettlementPageContent() {
           </div>
 
           <div style={{ marginBottom: '24px' }}>
-            <h2 style={{
-              fontSize: '20px',
-              fontWeight: '600',
+            <h2 style={{ 
+              fontSize: '20px', 
+              fontWeight: '600', 
               marginBottom: '16px',
               color: '#1f2937',
               borderBottom: '1px solid #e5e7eb',
