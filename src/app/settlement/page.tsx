@@ -236,6 +236,32 @@ function SettlementPageContent() {
           } catch (error) {
             console.error('Error processing direct settlement:', error);
           }
+        } else if (searchParams.get('finalizeMode') === 'true') {
+          // Process all accumulated bills for final settlement
+          console.log('Processing finalize mode - all accumulated bills');
+
+          // DO NOT clear savedSplits - it contains the custom split data from finalize-split page!
+          // Just proceed with the existing data
+          console.log('DEBUG - Keeping existing savedSplits for final settlement');
+
+          try {
+            // Get all people from localStorage
+            const savedPeople = localStoragePeople.getPeople();
+            if (savedPeople.length === 0) {
+              router.push('/');
+              return;
+            }
+
+            setPeople(savedPeople);
+
+            // Calculate settlement for ALL accumulated bills
+            const settlementData = calculateSettlement(savedPeople);
+            setSettlement(settlementData);
+
+            console.log('DEBUG - Final settlement calculated for all bills');
+          } catch (error) {
+            console.error('Error processing final settlement:', error);
+          }
         } else if (splitOptionParam === 'equal' && billUniqueIdParam) {
           // Handle equal split navigation directly to settlement
           console.log('Processing equal split settlement from URL params');
@@ -262,13 +288,13 @@ function SettlementPageContent() {
             if (matchingBill) {
               console.log('DEBUG - Found matching bill for equal settlement:', matchingBill);
 
-              const total = matchingBill.total;
+              const billTotalAmount = matchingBill.total;
 
               // Create equal split summary for savedSplits
-              const equalSplitSummary = {
+              const billEqualSplitSummary = {
                 id: Date.now().toString(),
                 date: new Date().toISOString(),
-                total: total,
+                total: billTotalAmount,
                 tax: matchingBill.tax || 0,
                 serviceCharge: matchingBill.serviceCharge || 0,
                 splitType: 'equal',
@@ -276,7 +302,7 @@ function SettlementPageContent() {
                 people: savedPeople.map((person: any) => ({
                   id: person.id,
                   name: person.name,
-                  amount: total / savedPeople.length,
+                  amount: billTotalAmount / savedPeople.length,
                   items: [] // Equal split - no specific item assignments
                 })),
                 createdBy: {
@@ -285,18 +311,95 @@ function SettlementPageContent() {
                 }
               };
 
-              const savedSplits = JSON.parse(localStorage.getItem('savedSplits') || '[]');
-              savedSplits.push(equalSplitSummary);
-              localStorage.setItem('savedSplits', JSON.stringify(savedSplits));
-              console.log('DEBUG - Saved equal split summary');
+              const billSavedSplits = JSON.parse(localStorage.getItem('savedSplits') || '[]');
+              // CHECK: Don't add duplicate equal split entries
+              const billExistingEqualBill = billSavedSplits.find((split: any) =>
+                split.splitType === 'equal' && split.billUniqueId === billUniqueIdParam
+              );
+              if (!billExistingEqualBill) {
+                billSavedSplits.push(billEqualSplitSummary);
+                localStorage.setItem('savedSplits', JSON.stringify(billSavedSplits));
+                console.log('DEBUG - Saved equal split summary');
+              } else {
+                console.log('DEBUG - Equal split summary already exists, skipping save');
+              }
 
               // Calculate settlement
-              const settlementData = calculateSettlement(savedPeople);
-              setSettlement(settlementData);
+              const currentSettlementData = calculateSettlement(savedPeople);
+              setSettlement(currentSettlementData);
 
-            } else {
-              console.error('Bill not found for billUniqueId:', billUniqueIdParam);
+          } else {
+            console.error('Bill not found for billUniqueId:', billUniqueIdParam);
+
+            // DEBUG: List all bills to find the mismatch
+            console.log('DEBUG - All bills in localStorage:');
+            allBills.forEach((bill: any) => {
+              console.log('  - Bill ID:', bill.id, 'Person:', bill.personName);
+            });
+
+            console.log('DEBUG - Searched billUniqueId:', billUniqueIdParam);
+
+            // Try fuzzy matching as fallback
+            let foundFallback = false;
+            for (const bill of allBills) {
+              // Check if bill ID contains parts of searched ID
+              const billParts = bill.id.split('-');
+              const searchParts = billUniqueIdParam.split('-');
+
+              const hasMatchingPersonId = billParts.some((part: string) =>
+                searchParts.some((searchPart: string) => searchPart.includes(part) || part.includes(searchPart))
+              );
+
+              if (hasMatchingPersonId && !foundFallback) {
+                console.log('DEBUG - Found fuzzy match, using bill:', bill.id);
+
+                const fallbackTotal = bill.total;
+
+                // Create equal split summary for savedSplits
+                const fallbackEqualSplitSummary = {
+                  id: Date.now().toString(),
+                  date: new Date().toISOString(),
+                  total: fallbackTotal,
+                  tax: bill.tax || 0,
+                  serviceCharge: bill.serviceCharge || 0,
+                  splitType: 'equal',
+                  billUniqueId: bill.id, // Use found bill ID
+                  people: savedPeople.map((person: any) => ({
+                    id: person.id,
+                    name: person.name,
+                    amount: fallbackTotal / savedPeople.length,
+                    items: [] // Equal split - no specific item assignments
+                  })),
+                  createdBy: {
+                    id: bill.personId,
+                    name: bill.personName
+                  }
+                };
+
+                const fallbackSavedSplits = JSON.parse(localStorage.getItem('savedSplits') || '[]');
+                // CHECK: Don't add duplicate equal split entries
+                const fallbackExistingEqualBill = fallbackSavedSplits.find((split: any) =>
+                  split.splitType === 'equal' && split.billUniqueId === bill.id
+                );
+                if (!fallbackExistingEqualBill) {
+                  fallbackSavedSplits.push(fallbackEqualSplitSummary);
+                  localStorage.setItem('savedSplits', JSON.stringify(fallbackSavedSplits));
+                  console.log('DEBUG - Saved fallback equal split summary');
+
+                  // Calculate settlement with fallback bill
+                  const fallbackSettlementData = calculateSettlement(savedPeople);
+                  setSettlement(fallbackSettlementData);
+                  foundFallback = true; // Set flag and exit loop
+                  break;
+                }
+              }
             }
+
+            // If no fallback found, show error message
+            if (!foundFallback) {
+              alert(`Bill not found for: ${billUniqueIdParam}\n\nThis might be due to a timing issue. Please try clicking "Equal Split" again.`);
+            }
+          }
           } catch (error) {
             console.error('Error processing equal split settlement:', error);
           }
@@ -766,32 +869,34 @@ function SettlementPageContent() {
                       let totalEqualSharing = 0;
                       let hasCustomItems = false;
 
-                      console.log('DEBUG - Processing consumption for', expense.person.name);
-
-                      // Find recent splits for this person (last 15 minutes)
-                      const recentSplits = savedSplits.filter((split: any) => {
-                        const splitTime = new Date(split.date).getTime();
-                        const fifteenMinutesAgo = Date.now() - 900000; // 15 minutes
-                        const isRecent = splitTime >= fifteenMinutesAgo;
-
+                      // Find ALL splits where this person participated
+                      const personSplits = savedSplits.filter((split: any) => {
                         // Match by person's participation in split
                         const personInSplit = split.people?.some((p: any) => p.id === expense.person.id);
                         const creatorMatch = split.createdBy?.id === expense.person.id;
 
-                        return isRecent && (personInSplit || creatorMatch);
+                        return personInSplit || creatorMatch;
                       });
-
-                      console.log('DEBUG - Found', recentSplits.length, 'recent splits for', expense.person.name);
 
                       // Calculate total custom costs from split data
                       let totalCustomCosts = 0;
 
-                      // Aggregate from ALL recent splits for this person
-                      recentSplits.forEach((split: any) => {
-                        const personInSplit = split.people?.find((p: any) => p.id === expense.person.id);
+                      console.log('DEBUG - Processing personSplits for', expense.person.name, '- splits:', personSplits.length);
+                      console.log('DEBUG - expense.person.id to find:', expense.person.id);
+
+                      // Aggregate from ALL splits for this person
+                      personSplits.forEach((split: any) => {
+                        console.log('DEBUG - Split.people IDs:', split.people?.map((p: any) => p.id));
+                        console.log('DEBUG - Split type:', split.splitType);
+
+                        const personInSplit = split.people?.find((p: any) => {
+                          console.log('DEBUG - Comparing p.id:', p.id, 'with expense.person.id:', expense.person.id);
+                          return p.id === expense.person.id;
+                        });
+
+                        console.log('DEBUG - personInSplit found:', !!personInSplit);
 
                         if (personInSplit) {
-                          console.log('DEBUG - Person is in split, amount:', personInSplit.amount);
 
                           if (split.splitType === 'custom') {
                             // Custom split: get specific items this person was assigned
@@ -814,19 +919,27 @@ function SettlementPageContent() {
                                 }
                               });
 
-                              personInSplit.items.forEach((item: any) => {
-                                const key = `${item.name}_${item.price}`;
-                                const count = itemCounts[key] || 1;
-                                const splitPrice = item.price / count;
+                        personInSplit.items.forEach((item: any) => {
+                          console.log('DEBUG - Processing item:', item);
+                          const key = `${item.name}_${item.price}`;
+                          const count = itemCounts[key] || 1;
+                          const splitPrice = item.price / count;
 
-                                const itemDesc = `${item.name} ${formatCurrency(splitPrice)}`;
-                                if (!personItems.includes(itemDesc)) {
-                                  personItems.push(itemDesc);
-                                  console.log('DEBUG - Added custom item:', itemDesc);
-                                  // Track the amount for this item
-                                  totalCustomCosts += splitPrice;
-                                }
-                              });
+                          const itemDesc = `${item.name} ${formatCurrency(splitPrice)}`;
+                          console.log('DEBUG - Generated itemDesc:', itemDesc);
+                          console.log('DEBUG - personItems before check:', personItems);
+
+                          if (!personItems.includes(itemDesc)) {
+                            personItems.push(itemDesc);
+                            console.log('DEBUG - Added custom item to personItems:', itemDesc);
+                            console.log('DEBUG - personItems after add:', personItems);
+                            // Track the amount for this item
+                            totalCustomCosts += splitPrice;
+                            console.log('DEBUG - totalCustomCosts updated to:', totalCustomCosts);
+                          } else {
+                            console.log('DEBUG - Item already in personItems, skipped:', itemDesc);
+                          }
+                        });
                             } else {
                               // Custom split but no item assignments - count as equal sharing
                               totalEqualSharing += personInSplit.amount;
@@ -842,15 +955,33 @@ function SettlementPageContent() {
                         }
                       });
 
-                      // If we have custom items, calculate equal sharing as: total consumption - custom item costs
-                      if (totalCustomCosts > 0) {
-                        const calculatedEqualSharing = expense.consumption - totalCustomCosts;
-                        if (calculatedEqualSharing > 0) {
-                          totalEqualSharing = calculatedEqualSharing;
-                          console.log('DEBUG - Calculated equal sharing from total consumption:',
-                            expense.consumption, '-', totalCustomCosts, '=', totalEqualSharing);
-                        }
-                      }
+                      // DEBUG: Full calculation breakdown - FINAL FIX HERE
+                      console.log('=== DEBUG SHARING CALCULATION FOR', expense.person.name, '===');
+                      console.log('expense.consumption:', expense.consumption);
+                      console.log('totalCustomCosts:', totalCustomCosts);
+
+                      console.log('savedSplits length from outer scope:', savedSplits.length);
+
+                      const customBillTotal = savedSplits
+                        .filter((split: any) => split.splitType === 'custom')
+                        .reduce((sum: number, split: any) => sum + (split.total || 0), 0);
+                      console.log('customBillTotal from savedSplits:', customBillTotal);
+
+                      const totalEqualExpenses = settlement.totalExpenses - customBillTotal;
+                      console.log('settlement.totalExpenses:', settlement.totalExpenses);
+                      console.log('totalEqualExpenses:', totalEqualExpenses);
+
+                      const equalSharingPerPerson = totalEqualExpenses / people.length;
+                      console.log('people.length:', people.length);
+                      console.log('equalSharingPerPerson:', equalSharingPerPerson);
+
+                      const condition = totalCustomCosts < expense.consumption;
+                      console.log('condition (totalCustomCosts < expense.consumption):', condition);
+                      console.log('final totalEqualSharing:', condition ? equalSharingPerPerson : 0);
+
+                      // FIXED: Calculate equal sharing directly from settlement data
+                      // Total equal sharing = (total expenses - custom bill amount) / people count
+                      totalEqualSharing = condition ? equalSharingPerPerson : 0;
 
                       console.log('DEBUG - Final consumption for', expense.person.name, ':');
                       console.log('  - Custom items:', personItems);

@@ -882,9 +882,9 @@ function AddBillPageContent() {
                     setSplitOption('equal');
                     const billData = handleContinue();
                     if (billData) {
+                      // For final bill, process ALL accumulated bills (don't specify billUniqueId)
                       const params = new URLSearchParams({
-                        splitOption: 'equal',
-                        billUniqueId: billId  // Use the already generated billId
+                        finalizeMode: 'true'  // Indicator to process all accumulated bills
                       });
                       router.push(`/settlement?${params.toString()}`);
                     }
