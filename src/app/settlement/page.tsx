@@ -31,6 +31,8 @@ function SettlementPageContent() {
   const [showShareImage, setShowShareImage] = useState(false);
   const imageRef = useRef<HTMLDivElement>(null);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [showConsumptionImage, setShowConsumptionImage] = useState(false);
+  const consumptionImageRef = useRef<HTMLDivElement>(null);
 
   const copyToClipboard = async (text: string) => {
     try {
@@ -855,8 +857,152 @@ function SettlementPageContent() {
                   console.log('DEBUG - Settlement object:', settlement);
                   return null;
                 })()}
-                <h2 className="text-xl font-semibold text-foreground mb-4">Individual Consumption Summary</h2>
-                <p className="text-muted-foreground mb-4">Shows what each person consumed</p>
+                <div className="flex justify-between items-center mb-4">
+                  <div>
+                    <h2 className="text-xl font-semibold text-foreground">Individual Consumption Summary</h2>
+                    <p className="text-muted-foreground">Shows what each person consumed</p>
+                  </div>
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={async () => {
+                        let text = 'Individual Consumption Summary\n\n';
+                        settlement.personExpenses.forEach((expense: any) => {
+                          // Replicate the consumption calculation logic
+                          const savedSplits = JSON.parse(localStorage.getItem('savedSplits') || '[]');
+                          const personSplits = savedSplits.filter((split: any) => {
+                            const personInSplit = split.people?.some((p: any) => p.id === expense.person.id);
+                            const creatorMatch = split.createdBy?.id === expense.person.id;
+                            return personInSplit || creatorMatch;
+                          });
+
+                          let personItems: string[] = [];
+                          let totalEqualSharing = 0;
+                          let totalCustomCosts = 0;
+
+                          personSplits.forEach((split: any) => {
+                            const personInSplit = split.people?.find((p: any) => p.id === expense.person.id);
+                            if (personInSplit) {
+                              if (split.splitType === 'custom' && personInSplit.items?.length > 0) {
+                                const itemCounts: {[key: string]: number} = {};
+                                split.people.forEach((p: any) => {
+                                  p.items?.forEach((item: any) => {
+                                    const key = `${item.name}_${item.price}`;
+                                    if (!itemCounts[key]) itemCounts[key] = 0;
+                                    itemCounts[key]++;
+                                  });
+                                });
+                                personInSplit.items.forEach((item: any) => {
+                                  const key = `${item.name}_${item.price}`;
+                                  const count = itemCounts[key] || 1;
+                                  const splitPrice = item.price / count;
+                                  const itemDesc = `${item.name} ${formatCurrency(splitPrice)}`;
+                                  if (!personItems.includes(itemDesc)) {
+                                    personItems.push(itemDesc);
+                                    totalCustomCosts += splitPrice;
+                                  }
+                                });
+                              } else {
+                                totalEqualSharing += personInSplit.amount;
+                              }
+                            }
+                          });
+
+                          const customBillTotal = savedSplits
+                            .filter((split: any) => split.splitType === 'custom')
+                            .reduce((sum: number, split: any) => sum + (split.total || 0), 0);
+                          const totalEqualExpenses = settlement.totalExpenses - customBillTotal;
+                          const equalSharingPerPerson = totalEqualExpenses / people.length;
+                          const condition = totalCustomCosts < expense.consumption;
+                          totalEqualSharing = condition ? equalSharingPerPerson : 0;
+
+                          let consumptionDescription: string;
+                          if (personItems.length > 0) {
+                            consumptionDescription = `paid for ${personItems.join(', ')}`;
+                            if (totalEqualSharing > 0) {
+                              consumptionDescription += `, sharing ${formatCurrency(totalEqualSharing)}`;
+                            }
+                          } else if (totalEqualSharing > 0) {
+                            consumptionDescription = `sharing ${formatCurrency(totalEqualSharing)}`;
+                          } else if (expense.consumption > 0) {
+                            consumptionDescription = `sharing ${formatCurrency(expense.consumption)}`;
+                          } else {
+                            consumptionDescription = 'consumed nothing';
+                          }
+
+                          text += `${expense.person.name}: ${consumptionDescription}\n`;
+                        });
+
+                        await copyToClipboard(text);
+                      }}
+                      className="p-2 rounded-full hover:bg-accent/50 transition-colors"
+                      title="Copy Individual Consumption Summary"
+                      aria-label="Copy Individual Consumption Summary"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-copy-icon lucide-copy"><rect width="14" height="14" x="8" y="8" rx="2 ry" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (isGeneratingImage) return;
+
+                        setIsGeneratingImage(true);
+                        setShowConsumptionImage(true);
+
+                        await new Promise(resolve => setTimeout(resolve, 100));
+
+                        try {
+                          if (!consumptionImageRef.current) throw new Error('Consumption image element not found');
+
+                          const dataUrl = await toPng(consumptionImageRef.current, {
+                            backgroundColor: '#ffffff',
+                            quality: 1,
+                            cacheBust: true,
+                          });
+
+                          if (navigator.share) {
+                            try {
+                              const response = await fetch(dataUrl);
+                              const blob = await response.blob();
+                              const file = new File([blob], 'consumption-summary.png', { type: 'image/png' });
+
+                              await navigator.share({
+                                files: [file],
+                                title: 'Individual Consumption Summary',
+                                text: 'Check out our consumption summary',
+                              });
+                              return;
+                            } catch (shareError) {
+                              console.log('Native sharing failed, falling back to download', shareError);
+                            }
+                          }
+
+                          const link = document.createElement('a');
+                          link.download = `consumption-summary-${new Date().toISOString().split('T')[0]}.png`;
+                          link.href = dataUrl;
+                          document.body.appendChild(link);
+                          link.click();
+                          document.body.removeChild(link);
+
+                        } catch (error) {
+                          console.error('Error generating consumption image:', error);
+                          alert('Failed to generate consumption summary image. Please try again.');
+                        } finally {
+                          setIsGeneratingImage(false);
+                          setShowConsumptionImage(false);
+                        }
+                      }}
+                      className="p-2 rounded-full hover:bg-accent/50 transition-colors"
+                      title="Share Individual Consumption Summary as Image"
+                      aria-label="Share Individual Consumption Summary as image"
+                      disabled={isGeneratingImage}
+                    >
+                      {isGeneratingImage ? (
+                        <div className="w-5 h-5 border-2 border-foreground/30 border-t-foreground rounded-full animate-spin" />
+                      ) : (
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-external-link-icon lucide-external-link"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
+                      )}
+                    </button>
+                  </div>
+                </div>
 
                 <div className="space-y-4">
                   {(() => {
@@ -1103,6 +1249,129 @@ function SettlementPageContent() {
             >
               Clear All & Start Over
             </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Hidden element for consumption summary image generation */}
+      <div style={{ position: 'fixed', left: '-9999px', visibility: showConsumptionImage ? 'visible' : 'hidden' }}>
+        <div
+          ref={consumptionImageRef}
+          style={{
+            width: '400px',
+            padding: '32px',
+            backgroundColor: 'white',
+            color: 'black',
+            fontFamily: 'Arial, sans-serif',
+            borderRadius: '12px',
+            boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+          }}
+        >
+          <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+            <h1 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '12px', color: '#1f2937' }}>Individual Consumption Summary</h1>
+          </div>
+
+          <div style={{ marginBottom: '24px' }}>
+            <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+              {settlement?.personExpenses.map((expense: any, index: number) => {
+                const savedSplits = JSON.parse(localStorage.getItem('savedSplits') || '[]');
+                const personSplits = savedSplits.filter((split: any) => {
+                  const personInSplit = split.people?.some((p: any) => p.id === expense.person.id);
+                  const creatorMatch = split.createdBy?.id === expense.person.id;
+                  return personInSplit || creatorMatch;
+                });
+
+                let personItems: string[] = [];
+                let totalEqualSharing = 0;
+                let totalCustomCosts = 0;
+
+                personSplits.forEach((split: any) => {
+                  const personInSplit = split.people?.find((p: any) => p.id === expense.person.id);
+                  if (personInSplit) {
+                    if (split.splitType === 'custom' && personInSplit.items?.length > 0) {
+                      const itemCounts: {[key: string]: number} = {};
+                      split.people.forEach((p: any) => {
+                        p.items?.forEach((item: any) => {
+                          const key = `${item.name}_${item.price}`;
+                          if (!itemCounts[key]) itemCounts[key] = 0;
+                          itemCounts[key]++;
+                        });
+                      });
+                      personInSplit.items.forEach((item: any) => {
+                        const key = `${item.name}_${item.price}`;
+                        const count = itemCounts[key] || 1;
+                        const splitPrice = item.price / count;
+                        const itemDesc = `${item.name} ${formatCurrency(splitPrice)}`;
+                        if (!personItems.includes(itemDesc)) {
+                          personItems.push(itemDesc);
+                          totalCustomCosts += splitPrice;
+                        }
+                      });
+                    } else {
+                      totalEqualSharing += personInSplit.amount;
+                    }
+                  }
+                });
+
+                const customBillTotal = savedSplits
+                  .filter((split: any) => split.splitType === 'custom')
+                  .reduce((sum: number, split: any) => sum + (split.total || 0), 0);
+                const totalEqualExpenses = settlement.totalExpenses - customBillTotal;
+                const equalSharingPerPerson = totalEqualExpenses / people.length;
+                const condition = totalCustomCosts < expense.consumption;
+                totalEqualSharing = condition ? equalSharingPerPerson : 0;
+
+                let consumptionDescription: string;
+                if (personItems.length > 0) {
+                  consumptionDescription = `paid for ${personItems.join(', ')}`;
+                  if (totalEqualSharing > 0) {
+                    consumptionDescription += `, sharing ${formatCurrency(totalEqualSharing)}`;
+                  }
+                } else if (totalEqualSharing > 0) {
+                  consumptionDescription = `sharing ${formatCurrency(totalEqualSharing)}`;
+                } else if (expense.consumption > 0) {
+                  consumptionDescription = `sharing ${formatCurrency(expense.consumption)}`;
+                } else {
+                  consumptionDescription = 'consumed nothing';
+                }
+
+                return (
+                  <div key={expense.person.id} style={{
+                    marginBottom: '16px',
+                    padding: '12px',
+                    backgroundColor: index % 2 === 0 ? '#f9fafb' : 'white',
+                    borderRadius: '8px'
+                  }}>
+                    <p style={{ 
+                      fontSize: '16px',
+                      marginBottom: '4px',
+                      fontWeight: '500',
+                      color: '#1f2937'
+                    }}>
+                      <strong>{expense.person.name}:</strong> {consumptionDescription}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div style={{ 
+            marginTop: '24px', 
+            paddingTop: '16px', 
+            borderTop: '1px solid #e5e7eb', 
+            color: '#9ca3af', 
+            fontSize: '12px', 
+            textAlign: 'center' 
+          }}>
+            <div>Generated on {new Date().toLocaleDateString('id-ID', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit'
+            })}</div>
+            <div style={{ marginTop: '4px' }}>Splity App</div>
           </div>
         </div>
       </div>
