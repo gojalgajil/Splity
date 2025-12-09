@@ -2,32 +2,77 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Mobile-friendly scrollbar styling */
-.max-h-64::-webkit-scrollbar {
+/* Clean standardized scrollbar for max-h-64 containers */
+.max-h-64 {
+  scrollbar-width: thin !important;
+}
+
+/* Light mode: dark scrollbar on light background */
+html:not(.dark) .max-h-64::-webkit-scrollbar {
   width: 6px !important;
   height: 6px !important;
 }
 
-.max-h-64::-webkit-scrollbar-track {
+html:not(.dark) .max-h-64::-webkit-scrollbar-track {
   background: rgba(0, 0, 0, 0.05) !important;
+}
+
+html:not(.dark) .max-h-64::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.4) !important;
   border-radius: 3px !important;
 }
 
-.max-h-64::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.3) !important;
-  border-radius: 3px !important;
+html:not(.dark) .max-h-64::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.6) !important;
 }
 
-.max-h-64::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.5) !important;
+html:not(.dark) .max-h-64 {
+  scrollbar-color: rgba(0, 0, 0, 0.4) rgba(0, 0, 0, 0.05) !important;
 }
 
-/* Firefox scrollbar support */
-.max-h-64 {
+/* Dark mode: bright blue scrollbar - using more specific selectors */
+.dark body .max-h-64::-webkit-scrollbar,
+body.dark .max-h-64::-webkit-scrollbar,
+html.dark .max-h-64::-webkit-scrollbar,
+html:where([class*="dark"]) .max-h-64::-webkit-scrollbar {
+  width: 8px !important;
+  height: 8px !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+.dark body .max-h-64::-webkit-scrollbar-track,
+body.dark .max-h-64::-webkit-scrollbar-track,
+html.dark .max-h-64::-webkit-scrollbar-track,
+html:where([class*="dark"]) .max-h-64::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.4) !important;
+  border-radius: 4px !important;
+}
+
+.dark body .max-h-64::-webkit-scrollbar-thumb,
+body.dark .max-h-64::-webkit-scrollbar-thumb,
+html.dark .max-h-64::-webkit-scrollbar-thumb,
+html:where([class*="dark"]) .max-h-64::-webkit-scrollbar-thumb {
+  background: #4f9ff0 !important;
+  border-radius: 4px !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+.dark body .max-h-64::-webkit-scrollbar-thumb:hover,
+body.dark .max-h-64::-webkit-scrollbar-thumb:hover,
+html.dark .max-h-64::-webkit-scrollbar-thumb:hover,
+html:where([class*="dark"]) .max-h-64::-webkit-scrollbar-thumb:hover {
+  background: #66b3ff !important;
+}
+
+.dark body .max-h-64,
+body.dark .max-h-64,
+html.dark .max-h-64,
+html:where([class*="dark"]) .max-h-64 {
   scrollbar-width: thin !important;
-  scrollbar-color: rgba(0, 0, 0, 0.3) rgba(0, 0, 0, 0.05) !important;
+  scrollbar-color: #4f9ff0 rgba(0, 0, 0, 0.4) !important;
 }
-
 /* --- Clean Professional Theme (shadcn default) --- */
 
 @layer base {
@@ -140,8 +185,50 @@ html, body {
   background: hsl(var(--muted));
 }
 
-/* For Firefox */
-html {
-  scrollbar-width: thin;
-  scrollbar-color: hsl(var(--foreground) / 0.3) hsl(var(--muted));
+/* Priority scrollbar overrides for max-h-64 containers */
+/* Light mode - high priority */
+html:not(.dark) .max-h-64::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.4) !important;
+}
+
+html:not(.dark) .max-h-64::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05) !important;
+}
+
+html:not(.dark) .max-h-64::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.6) !important;
+}
+
+/* Dark mode - very high priority */
+.dark .max-h-64::-webkit-scrollbar-thumb,
+body.dark .max-h-64::-webkit-scrollbar-thumb,
+html.dark .max-h-64::-webkit-scrollbar-thumb,
+html:where([class*="dark"]) .max-h-64::-webkit-scrollbar-thumb {
+  background: #4f9ff0 !important;
+}
+
+.dark .max-h-64::-webkit-scrollbar-track,
+body.dark .max-h-64::-webkit-scrollbar-track,
+html.dark .max-h-64::-webkit-scrollbar-track,
+html:where([class*="dark"]) .max-h-64::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.4) !important;
+}
+
+.dark .max-h-64::-webkit-scrollbar-thumb:hover,
+body.dark .max-h-64::-webkit-scrollbar-thumb:hover,
+html.dark .max-h-64::-webkit-scrollbar-thumb:hover,
+html:where([class*="dark"]) .max-h-64::-webkit-scrollbar-thumb:hover {
+  background: #66b3ff !important;
+}
+
+/* Firefox support */
+html:not(.dark) .max-h-64 {
+  scrollbar-color: rgba(0, 0, 0, 0.4) rgba(0, 0, 0, 0.05) !important;
+}
+
+.dark .max-h-64,
+body.dark .max-h-64,
+html.dark .max-h-64,
+html:where([class*="dark"]) .max-h-64 {
+  scrollbar-color: #4f9ff0 rgba(0, 0, 0, 0.4) !important;
 }

@@ -615,12 +615,7 @@ function AddBillPageContent() {
                 Items:
               </h3>
               <div className="relative">
-                <div
-                  className="max-h-64 overflow-y-auto mb-4 scrollbar-thin scrollbar-thumb-current scrollbar-track-transparent scrollbar-thumb-opacity-40 scrollbar-rounded"
-                  style={{
-                    scrollbarColor: 'currentColor transparent'
-                  }}
-                >
+                <div className="max-h-64 overflow-y-auto mb-4">
                 <table className="min-w-full divide-y divide-border md:table">
                   <thead className="hidden md:table-header-group">
                     <tr>
