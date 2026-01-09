@@ -897,7 +897,9 @@ function SettlementPageContent() {
                                 personInSplit.items.forEach((item: any) => {
                                   const key = `${item.name}_${item.price}`;
                                   const count = itemCounts[key] || 1;
-                                  const splitPrice = item.price / count;
+                                  // For quantity-based split, use the actual quantity * price
+                                  const actualPrice = item.price * item.quantity;
+                                  const splitPrice = actualPrice; // No division needed since quantity is already per person
                                   const itemDesc = `${item.name} ${formatCurrency(splitPrice)}`;
                                   if (!personItems.includes(itemDesc)) {
                                     personItems.push(itemDesc);
@@ -1072,7 +1074,10 @@ function SettlementPageContent() {
                           console.log('DEBUG - Processing item:', item);
                           const key = `${item.name}_${item.price}`;
                           const count = itemCounts[key] || 1;
-                          const splitPrice = item.price / count;
+                          // For quantity-based split, use the actual quantity * price
+                          // item.quantity now represents the quantity this person consumed
+                          const actualPrice = item.price * item.quantity;
+                          const splitPrice = actualPrice; // No division needed since quantity is already per person
 
                           const itemDesc = `${item.name} ${formatCurrency(splitPrice)}`;
                           console.log('DEBUG - Generated itemDesc:', itemDesc);
@@ -1434,7 +1439,9 @@ function SettlementPageContent() {
                       personInSplit.items.forEach((item: any) => {
                         const key = `${item.name}_${item.price}`;
                         const count = itemCounts[key] || 1;
-                        const splitPrice = item.price / count;
+                        // For quantity-based split, use the actual quantity * price
+                        const actualPrice = item.price * item.quantity;
+                        const splitPrice = actualPrice; // No division needed since quantity is already per person
                         const itemDesc = `${item.name} ${formatCurrency(splitPrice)}`;
                         if (!personItems.includes(itemDesc)) {
                           personItems.push(itemDesc);

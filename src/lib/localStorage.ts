@@ -22,6 +22,7 @@ export interface Bill {
   createdAt: string;
   splitType?: 'equal' | 'custom' | 'both';
   personShares?: { [personId: string]: number };
+  itemAssignments?: { [itemId: string]: { [personId: string]: number } }; // itemId -> { personId: quantity }
 }
 
 export interface BillItem {

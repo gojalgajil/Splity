@@ -20,7 +20,7 @@ interface ReceiptItem {
 
 interface ItemAssignment {
   itemId: string;
-  personIds: string[];
+  personQuantities: { [personId: string]: number };
   isShared: boolean;
 }
 
@@ -121,7 +121,7 @@ function SplitPageContent() {
         // Initialize assignments for each item
         const initialAssignments: ItemAssignment[] = itemsWithIds.map((item: any) => ({
           itemId: item.id,
-          personIds: [],
+          personQuantities: {},
           isShared: false,
         }));
         setAssignments(initialAssignments);
@@ -144,7 +144,7 @@ function SplitPageContent() {
     if (splitOption === 'custom' && items.length > 0 && people.length > 0 && assignments.length === 0) {
       const initialAssignments: ItemAssignment[] = items.map((item) => ({
         itemId: item.id,
-        personIds: [], // Start with no assignments - users must manually assign items
+        personQuantities: {}, // Start with no assignments - users must manually assign items
         isShared: false,
       }));
       setAssignments(initialAssignments);
@@ -191,7 +191,9 @@ function SplitPageContent() {
       // Remove person from all assignments
       setAssignments(assignments.map(assignment => ({
         ...assignment,
-        personIds: assignment.personIds.filter(id => id !== personId),
+        personQuantities: Object.fromEntries(
+          Object.entries(assignment.personQuantities).filter(([personId]) => personId !== personId)
+        ),
       })));
     } catch (err) {
       console.error('Unexpected deletePerson error:', err);
@@ -221,17 +223,23 @@ function SplitPageContent() {
     setEditingPersonName('');
   };
 
-  const toggleItemAssignment = (itemId: string, personId: string) => {
+  const updateItemQuantity = (itemId: string, personId: string, quantity: number) => {
     setAssignments(assignments.map(assignment => {
       if (assignment.itemId === itemId) {
-        const personIds = assignment.personIds.includes(personId)
-          ? assignment.personIds.filter(id => id !== personId)
-          : [...assignment.personIds, personId];
+        const newPersonQuantities = { ...assignment.personQuantities };
+        
+        if (quantity <= 0) {
+          delete newPersonQuantities[personId];
+        } else {
+          newPersonQuantities[personId] = quantity;
+        }
+        
+        const assignedPeople = Object.keys(newPersonQuantities);
         
         return {
           ...assignment,
-          personIds,
-          isShared: personIds.length > 1,
+          personQuantities: newPersonQuantities,
+          isShared: assignedPeople.length > 1,
         };
       }
       return assignment;
@@ -252,27 +260,30 @@ function SplitPageContent() {
     // Custom split logic
     let share = 0;
     
-    // Calculate share of items - ALL items are SHARED in custom split
+    // Calculate share of items based on quantity
     assignments.forEach(assignment => {
-      if (assignment.personIds.includes(personId)) {
+      const personQuantity = assignment.personQuantities[personId];
+      if (personQuantity && personQuantity > 0) {
         const item = items.find(i => i.id === assignment.itemId);
         if (item) {
           const itemTotal = item.price * item.quantity;
-          // Always divide by number of assignees since custom split means sharing
-          share += itemTotal / assignment.personIds.length;
+          const totalAssignedQuantity = Object.values(assignment.personQuantities).reduce((sum, qty) => sum + qty, 0);
+          share += (personQuantity / totalAssignedQuantity) * itemTotal;
         }
       }
     });
     
-    // Calculate share of tax and service charge - use SAME divided amount
+    // Calculate share of tax and service charge based on actual consumption
     const assignedItemsTotal = assignments
-      .filter(a => a.personIds.includes(personId))
       .reduce((sum, assignment) => {
-        const item = items.find(i => i.id === assignment.itemId);
-        if (item) {
-          const itemTotal = item.price * item.quantity;
-          // Always use divided amount since all assignments are shared in custom split
-          return sum + (itemTotal / assignment.personIds.length);
+        const personQuantity = assignment.personQuantities[personId];
+        if (personQuantity && personQuantity > 0) {
+          const item = items.find(i => i.id === assignment.itemId);
+          if (item) {
+            const itemTotal = item.price * item.quantity;
+            const totalAssignedQuantity = Object.values(assignment.personQuantities).reduce((sum, qty) => sum + qty, 0);
+            return sum + ((personQuantity / totalAssignedQuantity) * itemTotal);
+          }
         }
         return sum;
       }, 0);
@@ -307,9 +318,10 @@ function SplitPageContent() {
           // For the current user (payer), only calculate share if they actually consumed items
           // In titipan case, the payer should have 0 share
           if (person.id === currentUser.id) {
-            const consumedItems = items.filter(item =>
-              assignments.some(a => a.itemId === item.id && a.personIds.includes(person.id))
-            );
+            const consumedItems = items.filter(item => {
+              const assignment = assignments.find(a => a.itemId === item.id);
+              return assignment && assignment.personQuantities[person.id] > 0;
+            });
 
             if (consumedItems.length === 0) {
               // Pure titipan case - payer has 0 share
@@ -345,16 +357,18 @@ function SplitPageContent() {
           amount: splitOption === 'custom' ? personShares[person.id] : total / people.length,
           items: splitOption === 'custom'
             ? items
-                .filter(item =>
-                  assignments.some(
-                    a => a.itemId === item.id && a.personIds.includes(person.id)
-                  )
-                )
-                .map(item => ({
-                  name: item.name,
-                  price: item.price,
-                  quantity: item.quantity
-                }))
+                .filter(item => {
+                  const assignment = assignments.find(a => a.itemId === item.id);
+                  return assignment && assignment.personQuantities[person.id] > 0;
+                })
+                .map(item => {
+                  const assignment = assignments.find(a => a.itemId === item.id);
+                  return {
+                    name: item.name,
+                    price: item.price,
+                    quantity: assignment?.personQuantities[person.id] || 0
+                  };
+                })
             : []
         })),
         createdBy: {
@@ -388,7 +402,13 @@ function SplitPageContent() {
         serviceCharge: serviceCharge,
         total: total,
         splitType: splitOption || 'equal',
-        personShares: splitOption === 'custom' ? personShares : undefined
+        personShares: splitOption === 'custom' ? personShares : undefined,
+        itemAssignments: splitOption === 'custom' ? 
+          assignments.reduce((acc, assignment) => {
+            acc[assignment.itemId] = assignment.personQuantities;
+            return acc;
+          }, {} as { [itemId: string]: { [personId: string]: number } }) : 
+          undefined
       };
 
       console.log('DEBUG - Bill data to save:', billData);
@@ -457,31 +477,45 @@ function SplitPageContent() {
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <p className="text-sm font-medium text-foreground">Assigned to:</p>
-                      <div className="flex flex-wrap gap-2">
+                      <p className="text-sm font-medium text-foreground">Assign quantities:</p>
+                      <div className="space-y-2">
                         {people.map((person) => {
                           const assignment = assignments.find(a => a.itemId === item.id);
-                          const isAssigned = assignment?.personIds.includes(person.id) || false;
+                          const currentQuantity = assignment?.personQuantities[person.id] || 0;
                           const personColorIndex = people.findIndex(p => p.id === person.id) % colors.length;
+                          
                           return (
-                            <button
-                              key={`${item.id}-${person.id}`}
-                              type="button"
-                              onClick={() => toggleItemAssignment(item.id, person.id)}
-                              className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
-                                isAssigned
-                                  ? `${colors[personColorIndex]} text-primary-foreground`
-                                  : 'bg-muted text-foreground hover:bg-accent'
-                              }`}
-                            >
-                              {person.name}
-                            </button>
+                            <div key={`${item.id}-${person.id}`} className="flex items-center space-x-3">
+                              <div className={`w-3 h-3 rounded-full ${colors[personColorIndex]}`}></div>
+                              <span className="text-sm font-medium w-20">{person.name}</span>
+                              <input
+                                type="number"
+                                min="0"
+                                max={item.quantity}
+                                value={currentQuantity}
+                                onChange={(e) => {
+                                  const newQuantity = parseInt(e.target.value) || 0;
+                                  updateItemQuantity(item.id, person.id, newQuantity);
+                                }}
+                                className="w-16 px-2 py-1 text-sm border border-border rounded focus:outline-none focus:ring-2 focus:ring-primary"
+                              />
+                              <span className="text-sm text-muted-foreground">/ {item.quantity}</span>
+                            </div>
                           );
                         })}
                       </div>
-                      {assignments.find(a => a.itemId === item.id)?.personIds.length === 0 && (
-                        <p className="text-sm text-muted-foreground italic">Not assigned to anyone</p>
-                      )}
+                      {(() => {
+                        const assignment = assignments.find(a => a.itemId === item.id);
+                        const totalAssigned = assignment ? Object.values(assignment.personQuantities).reduce((sum, qty) => sum + qty, 0) : 0;
+                        return (
+                          <div className="text-sm text-muted-foreground">
+                            Total assigned: {totalAssigned} / {item.quantity}
+                            {totalAssigned > item.quantity && (
+                              <span className="text-red-500 ml-2">⚠️ Exceeds quantity!</span>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 ))}
