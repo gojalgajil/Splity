@@ -103,7 +103,6 @@ export async function POST(request: Request) {
     Extract all food and drink items, their quantities, prices, tax, and service charge from the provided receipt image.
     
     INSTRUCTIONS:
-    INSTRUCTIONS:
 1. Format the response as a JSON object with this structure:
    {
      "items": [{"name": string, "quantity": number, "price": number}],
