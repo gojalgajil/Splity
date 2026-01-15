@@ -251,6 +251,11 @@ function SplitPageContent() {
     
     // If split equally, divide total by number of people
     if (splitOption === 'equal' && people.length > 0) {
+      // Fix: Handle division by zero
+      if (people.length === 0) {
+        console.warn('Cannot calculate equal split: no people available');
+        return 0;
+      }
       const equalShare = total / people.length;
       console.log(`Equal split: total=${total}, people=${people.length}, share=${equalShare}`);
       return equalShare;
@@ -268,6 +273,11 @@ function SplitPageContent() {
         if (item) {
           const itemTotal = item.price * item.quantity;
           const totalAssignedQuantity = Object.values(assignment.personQuantities).reduce((sum, qty) => sum + qty, 0);
+          // Fix: Handle division by zero
+          if (totalAssignedQuantity === 0) {
+            console.warn('Cannot calculate item share: no assigned quantities');
+            return;
+          }
           share += (personQuantity / totalAssignedQuantity) * itemTotal;
         }
       }
@@ -282,6 +292,11 @@ function SplitPageContent() {
           if (item) {
             const itemTotal = item.price * item.quantity;
             const totalAssignedQuantity = Object.values(assignment.personQuantities).reduce((sum, qty) => sum + qty, 0);
+            // Fix: Handle division by zero
+            if (totalAssignedQuantity === 0) {
+              console.warn('Cannot calculate tax/service share: no assigned quantities');
+              return sum;
+            }
             return sum + ((personQuantity / totalAssignedQuantity) * itemTotal);
           }
         }
@@ -529,7 +544,11 @@ function SplitPageContent() {
               <h2 className="text-lg font-semibold text-foreground mb-2">Equal Split</h2>
               <p className="text-foreground">
                 Total bill (Rp {total.toLocaleString('id-ID')}) will be divided equally among {people.length} people.
-                Each person pays: <strong>Rp {(total / people.length).toLocaleString('id-ID')}</strong>
+                {people.length > 0 ? (
+                  <>Each person pays: <strong>Rp {(total / people.length).toLocaleString('id-ID')}</strong></>
+                ) : (
+                  <><span className="text-red-500">⚠️ Cannot split: no people available</span></>
+                )}
               </p>
             </div>
           )}
