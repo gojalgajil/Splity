@@ -18,6 +18,8 @@ export interface Bill {
   items: BillItem[];
   tax: number | null;
   serviceCharge: number | null;
+  discount: number | null;
+  handlingFee: number | null;
   total: number;
   createdAt: string;
   splitType?: 'equal' | 'custom' | 'both';

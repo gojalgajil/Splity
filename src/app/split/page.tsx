@@ -32,6 +32,8 @@ function SplitPageContent() {
   const [assignments, setAssignments] = useState<ItemAssignment[]>([]);
   const [tax, setTax] = useState<number | null>(null);
   const [serviceCharge, setServiceCharge] = useState<number | null>(null);
+  const [discount, setDiscount] = useState<number | null>(null);
+  const [handlingFee, setHandlingFee] = useState<number | null>(null);
   const [newPersonName, setNewPersonName] = useState('');
   const [editingPersonId, setEditingPersonId] = useState<string | null>(null);
   const [editingPersonName, setEditingPersonName] = useState('');
@@ -78,6 +80,8 @@ function SplitPageContent() {
     const itemsParam = searchParams.get('items');
     const taxParam = searchParams.get('tax');
     const serviceChargeParam = searchParams.get('serviceCharge');
+    const discountParam = searchParams.get('discount');
+    const handlingFeeParam = searchParams.get('handlingFee');
     const userId = searchParams.get('userId');
     const userName = searchParams.get('userName');
     const splitOptionParam = searchParams.get('splitOption');
@@ -87,6 +91,8 @@ function SplitPageContent() {
       itemsParam,
       taxParam,
       serviceChargeParam,
+      discountParam,
+      handlingFeeParam,
       userId,
       userName,
       splitOptionParam,
@@ -110,7 +116,9 @@ function SplitPageContent() {
     
     if (itemsParam) {
       try {
-        const parsedItems = JSON.parse(itemsParam);
+        // Decode the URL parameter first to handle special characters
+        const decodedItemsParam = decodeURIComponent(itemsParam);
+        const parsedItems = JSON.parse(decodedItemsParam);
         // Ensure each item has a unique ID
         const itemsWithIds = parsedItems.map((item: any, index: number) => ({
           ...item,
@@ -127,6 +135,14 @@ function SplitPageContent() {
         setAssignments(initialAssignments);
       } catch (error) {
         console.error('Error parsing items from URL:', error);
+        // Log the problematic string for debugging
+        if (error instanceof SyntaxError) {
+          console.error('Problematic JSON string:', itemsParam);
+          console.error('Decoded string:', decodeURIComponent(itemsParam));
+        }
+        // Fallback: treat as empty array if parsing fails
+        setItems([]);
+        setAssignments([]);
       }
     }
     
@@ -136,6 +152,14 @@ function SplitPageContent() {
     
     if (serviceChargeParam) {
       setServiceCharge(serviceChargeParam === 'null' ? null : parseFloat(serviceChargeParam));
+    }
+    
+    if (discountParam) {
+      setDiscount(discountParam === 'null' ? null : parseFloat(discountParam));
+    }
+    
+    if (handlingFeeParam) {
+      setHandlingFee(handlingFeeParam === 'null' ? null : parseFloat(handlingFeeParam));
     }
   }, [searchParams]);
 
@@ -152,7 +176,7 @@ function SplitPageContent() {
   }, [splitOption, items, people, assignments.length]);
 
   const subtotal = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  const total = subtotal + (tax || 0) + (serviceCharge || 0);
+  const total = subtotal + (tax || 0) + (serviceCharge || 0) + (handlingFee || 0) - (discount || 0);
 
   // Debug log untuk split option
   useEffect(() => {
@@ -306,7 +330,9 @@ function SplitPageContent() {
     if (subtotal > 0) {
       const taxShare = tax ? (tax * assignedItemsTotal) / subtotal : 0;
       const serviceShare = serviceCharge ? (serviceCharge * assignedItemsTotal) / subtotal : 0;
-      share += taxShare + serviceShare;
+      const discountShare = discount ? (discount * assignedItemsTotal) / subtotal : 0;
+      const handlingFeeShare = handlingFee ? (handlingFee * assignedItemsTotal) / subtotal : 0;
+      share += taxShare + serviceShare + handlingFeeShare - discountShare;
     }
     
     console.log(`Custom share for ${personId}: ${share}`);
@@ -323,6 +349,15 @@ function SplitPageContent() {
       console.error('No current user');
       return;
     }
+
+    // Log split bill calculation
+    console.log('=== SPLIT BILL CALCULATION ===');
+    console.log('Total Bill:', total);
+    people.forEach(person => {
+      const share = calculatePersonShare(person.id);
+      console.log(`${person.name}: Rp ${share.toLocaleString('id-ID')}`);
+    });
+    console.log('===============================');
 
     try {
       // Calculate person shares for custom split
@@ -364,6 +399,8 @@ function SplitPageContent() {
         total,
         tax: tax || 0,
         serviceCharge: serviceCharge || 0,
+        discount: discount || 0,
+        handlingFee: handlingFee || 0,
         splitType: splitOption || 'equal',
         billUniqueId: billUniqueId, // Use directly from URL params
         people: people.map(person => ({
@@ -415,6 +452,8 @@ function SplitPageContent() {
         })),
         tax: tax,
         serviceCharge: serviceCharge,
+        discount: discount,
+        handlingFee: handlingFee,
         total: total,
         splitType: splitOption || 'equal',
         personShares: splitOption === 'custom' ? personShares : undefined,

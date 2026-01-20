@@ -4,6 +4,8 @@ import { useState, useCallback, useRef, useEffect, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import { localStorageBills, localStoragePeople, Bill } from '@/lib/localStorage';
 import { Navbar } from '@/components/navbar';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 
 function formatIDR(amount: number): string {
   return new Intl.NumberFormat('id-ID', {
@@ -21,6 +23,8 @@ function AddBillPageContent() {
   const router = useRouter();
   const [extractedTax, setExtractedTax] = useState<number | null>(null);
   const [extractedServiceCharge, setExtractedServiceCharge] = useState<number | null>(null);
+  const [extractedDiscount, setExtractedDiscount] = useState<number | null>(null);
+  const [extractedHandlingFee, setExtractedHandlingFee] = useState<number | null>(null);
   const [splitOption, setSplitOption] = useState<'equal' | 'custom'>('equal'); // Default to equal since custom handled in finalize-split
   const [inputMode, setInputMode] = useState<'upload' | 'manual'>('upload');
   const [manualItems, setManualItems] = useState<Array<{name: string, price: number, quantity: number}>>([
@@ -28,6 +32,8 @@ function AddBillPageContent() {
   ]);
   const [manualTax, setManualTax] = useState<string>('');
   const [manualServiceCharge, setManualServiceCharge] = useState<string>('');
+  const [manualDiscount, setManualDiscount] = useState<string>('');
+  const [manualHandlingFee, setManualHandlingFee] = useState<string>('');
   const [people, setPeople] = useState<Array<{id: string, name: string}>>([]);
   const [selectedOwner, setSelectedOwner] = useState<string>('');
   const [canProceed, setCanProceed] = useState(false);
@@ -121,7 +127,9 @@ function AddBillPageContent() {
     const itemsTotal = items.reduce((sum, item) => sum + (item.price * (item.quantity || 1)), 0);
     const taxAmount = inputMode === 'manual' ? (parseFloat(manualTax) || 0) : (extractedTax || 0);
     const serviceChargeAmount = inputMode === 'manual' ? (parseFloat(manualServiceCharge) || 0) : (extractedServiceCharge || 0);
-    const totalBillAmount = itemsTotal + taxAmount + serviceChargeAmount;
+    const discountAmount = inputMode === 'manual' ? (parseFloat(manualDiscount) || 0) : (extractedDiscount || 0);
+    const handlingFeeAmount = inputMode === 'manual' ? (parseFloat(manualHandlingFee) || 0) : (extractedHandlingFee || 0);
+    const totalBillAmount = itemsTotal + taxAmount + serviceChargeAmount + handlingFeeAmount - discountAmount;
 
     // Find selected owner person
     const ownerPerson = people.find(p => p.id === selectedOwner);
@@ -143,6 +151,8 @@ function AddBillPageContent() {
       })),
       tax: taxAmount,
       serviceCharge: serviceChargeAmount,
+      discount: discountAmount,
+      handlingFee: handlingFeeAmount,
       total: totalBillAmount,
       splitType: splitOption as 'equal' | 'custom',
       createdAt: new Date().toISOString()
@@ -155,12 +165,16 @@ function AddBillPageContent() {
     setExtractedItems([]);
     setExtractedTax(null);
     setExtractedServiceCharge(null);
+    setExtractedDiscount(null);
+    setExtractedHandlingFee(null);
     setManualItems([{ name: '', price: 0, quantity: 1 }]);
     setManualTax('');
     setManualServiceCharge('');
+    setManualDiscount('');
+    setManualHandlingFee('');
 
     // Return bill data AND billId for navigation (don't navigate here)
-    return { items, taxAmount, serviceChargeAmount, ownerPerson, billId };
+    return { items, taxAmount, serviceChargeAmount, discountAmount, handlingFeeAmount, ownerPerson, billId };
   };
 
   const addManualItem = () => {
@@ -191,6 +205,8 @@ function AddBillPageContent() {
     setExtractedItems(validItems);
     setExtractedTax(parseFloat(manualTax) || null);
     setExtractedServiceCharge(parseFloat(manualServiceCharge) || null);
+    setExtractedDiscount(parseFloat(manualDiscount) || null);
+    setExtractedHandlingFee(parseFloat(manualHandlingFee) || null);
     setError('');
   };
 
@@ -325,13 +341,15 @@ function AddBillPageContent() {
 
       if (formattedItems.length > 0) {
         setExtractedItems(formattedItems);
-        // Extract tax and service charge from the response
+        // Extract tax, service charge, discount, and handling fee from response
         setExtractedTax(data.tax || null);
         setExtractedServiceCharge(data.serviceCharge || null);
+        setExtractedDiscount(data.discount || null);
+        setExtractedHandlingFee(data.handlingFee || null);
         setStatus(`Found ${formattedItems.length} items`);
         setError('');
       } else {
-        throw new Error('No valid items found in the receipt');
+        throw new Error('No valid items found in receipt');
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to process receipt';
@@ -345,6 +363,8 @@ function AddBillPageContent() {
       setExtractedItems([]); // Clear any previously extracted items
       setExtractedTax(null);
       setExtractedServiceCharge(null);
+      setExtractedDiscount(null);
+      setExtractedHandlingFee(null);
     } finally {
       setIsProcessing(false);
     }
@@ -569,25 +589,45 @@ function AddBillPageContent() {
                 </button>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-1">Tax (optional)</label>
-                  <input
+                  <Label htmlFor="tax">Tax (optional)</Label>
+                  <Input
+                    id="tax"
                     type="number"
                     placeholder="0"
                     value={manualTax}
                     onChange={(e) => setManualTax(e.target.value)}
-                    className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-1">Service Charge (optional)</label>
-                  <input
+                  <Label htmlFor="serviceCharge">Service Charge (optional)</Label>
+                  <Input
+                    id="serviceCharge"
                     type="number"
                     placeholder="0"
                     value={manualServiceCharge}
                     onChange={(e) => setManualServiceCharge(e.target.value)}
-                    className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="discount">Discount (optional)</Label>
+                  <Input
+                    id="discount"
+                    type="number"
+                    placeholder="0"
+                    value={manualDiscount}
+                    onChange={(e) => setManualDiscount(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="handlingFee">Handling & Delivery Fee (optional)</Label>
+                  <Input
+                    id="handlingFee"
+                    type="number"
+                    placeholder="0"
+                    value={manualHandlingFee}
+                    onChange={(e) => setManualHandlingFee(e.target.value)}
                   />
                 </div>
               </div>
@@ -765,13 +805,23 @@ function AddBillPageContent() {
                     <span className="text-muted-foreground">Service Charge:</span>
                     <span className="font-medium">{formatIDR(extractedServiceCharge || 0)}</span>
                   </div>
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-muted-foreground">Discount:</span>
+                    <span className="font-medium">{formatIDR(extractedDiscount || 0)}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-muted-foreground">Handling & Delivery Fee:</span>
+                    <span className="font-medium">{formatIDR(extractedHandlingFee || 0)}</span>
+                  </div>
                   <div className="flex justify-between items-center pt-2 border-t">
                     <span className="font-semibold text-foreground">Total:</span>
                     <span className="font-bold text-primary text-lg">
                       {formatIDR(
                         extractedItems.reduce((sum, item) => sum + (item.price * (item.quantity || 1)), 0) +
                         (extractedTax || 0) +
-                        (extractedServiceCharge || 0)
+                        (extractedServiceCharge || 0) +
+                        (extractedHandlingFee || 0) -
+                        (extractedDiscount || 0)
                       )}
                     </span>
                   </div>
@@ -816,9 +866,11 @@ function AddBillPageContent() {
                       console.log('DEBUG - handleContinue returned billData:', billData);
                       if (billData) {
                         const params = new URLSearchParams({
-                          items: JSON.stringify(billData.items),
+                          items: encodeURIComponent(JSON.stringify(billData.items)),
                           tax: billData.taxAmount.toString(),
                           serviceCharge: billData.serviceChargeAmount.toString(),
+                          discount: billData.discountAmount.toString(),
+                          handlingFee: billData.handlingFeeAmount.toString(),
                           userId: selectedOwner,
                           userName: billData.ownerPerson.name,
                           splitOption: 'custom',

@@ -100,14 +100,16 @@ export async function POST(request: Request) {
 
     // Prepare the prompt
     const prompt = `You are an expert at extracting receipt information. 
-    Extract all food and drink items, their quantities, prices, tax, and service charge from the provided receipt image.
+    Extract all food and drink items, their quantities, prices, tax, service charge, discount, and handling fee from the provided receipt image.
     
     INSTRUCTIONS:
 1. Format the response as a JSON object with this structure:
    {
      "items": [{"name": string, "quantity": number, "price": number}],
      "tax": number (null if not found),
-     "serviceCharge": number (null if not found)
+     "serviceCharge": number (null if not found),
+     "discount": number (null if not found),
+     "handlingFee": number (null if not found)
    }
 
 2. Extract food/drink items with accurate quantity and UNIT PRICE.
@@ -132,18 +134,22 @@ export async function POST(request: Request) {
 
 5. Look for service charge (terms include: "service charge", "service", "layanan", etc.)
 
-6. If tax or service charge is not found, set them to null.
+6. Look for discount (terms include: "discount", "diskon", "potongan", "promo", etc.)
 
-7. Remove all currency symbols and formatting:
+7. Look for handling fee (terms include: "handling", "delivery", "biaya antar", "ongkir", etc.)
+
+8. If tax, service charge, discount, or handling fee is not found, set them to null.
+
+9. Remove all currency symbols and formatting:
    - Remove "Rp", "IDR", spaces, dots, commas.
 
-8. Only include actual food/drink items, not headers, footers, or totals.
+10. Only include actual food/drink items, not headers, footers, or totals.
 
-9. Handle different receipt formats and languages.
+11. Handle different receipt formats and languages.
 
-10. Handle inconsistent spacing, punctuation, and formatting.
+12. Handle inconsistent spacing, punctuation, and formatting.
 
-11. Output must be valid JSON with NO additional text or markdown.
+13. Output must be valid JSON with NO additional text or markdown.
     
     EXAMPLE OUTPUT:
     {
@@ -152,7 +158,9 @@ export async function POST(request: Request) {
         {"name": "French Fries", "quantity": 1, "price": 10000}
       ],
       "tax": 2500,
-      "serviceCharge": 2000
+      "serviceCharge": 2000,
+      "discount": 1000,
+      "handlingFee": 3000
     }
     
     Return ONLY the JSON object, with no additional text or markdown formatting.`;
@@ -197,11 +205,15 @@ export async function POST(request: Request) {
     let items = [];
     let tax = null;
     let serviceCharge = null;
+    let discount = null;
+    let handlingFee = null;
     
     if (parsedData && typeof parsedData === 'object') {
       items = parsedData.items || [];
       tax = parsedData.tax || null;
       serviceCharge = parsedData.serviceCharge || null;
+      discount = parsedData.discount || null;
+      handlingFee = parsedData.handlingFee || null;
     } else if (Array.isArray(parsedData)) {
       // Backward compatibility for old format
       items = parsedData;
@@ -237,6 +249,8 @@ export async function POST(request: Request) {
       items: validItems,
       tax: tax,
       serviceCharge: serviceCharge,
+      discount: discount,
+      handlingFee: handlingFee,
       processingTime: `${processingTime}ms`
     });
 
