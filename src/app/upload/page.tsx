@@ -109,6 +109,8 @@ function UploadPageContent() {
         })),
         tax: taxAmount,
         serviceCharge: serviceChargeAmount,
+        discount: null,
+        handlingFee: null,
         total: totalBillAmount,
         splitType: (splitOption || 'equal') as 'equal' | 'custom' | 'both' // Include the split type in the bill
       };
@@ -854,6 +856,8 @@ function UploadPageContent() {
                         })),
                         tax: taxAmount,
                         serviceCharge: serviceChargeAmount,
+                        discount: null,
+                        handlingFee: null,
                         total: itemsTotal + taxAmount + serviceChargeAmount,
                         splitType: 'custom'
                       };

@@ -225,6 +225,8 @@ function SettlementPageContent() {
                 })),
                 tax: tax,
                 serviceCharge: serviceCharge,
+                discount: null,
+                handlingFee: null,
                 total: items.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0) + (tax || 0) + (serviceCharge || 0)
               };
               localStorageBills.addBill(billForStorage);
