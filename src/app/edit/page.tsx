@@ -12,14 +12,14 @@ interface ReceiptItem {
   quantity: number;
 }
 
-
-
 function EditPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [items, setItems] = useState<ReceiptItem[]>([]);
   const [tax, setTax] = useState<number | null>(null);
   const [serviceCharge, setServiceCharge] = useState<number | null>(null);
+  const [discount, setDiscount] = useState<number | null>(null);
+  const [handlingFee, setHandlingFee] = useState<number | null>(null);
   const [splitOption, setSplitOption] = useState<'equal' | 'custom' | null>(null);
   const [billCount, setBillCount] = useState(0);
   const [editingBillId, setEditingBillId] = useState<string | null>(null);
@@ -33,6 +33,8 @@ function EditPageContent() {
     const itemsParam = searchParams.get('items');
     const taxParam = searchParams.get('tax');
     const serviceChargeParam = searchParams.get('serviceCharge');
+    const discountParam = searchParams.get('discount');
+    const handlingFeeParam = searchParams.get('handlingFee');
     const splitOptionParam = searchParams.get('splitOption');
     const billId = searchParams.get('billId');
     const userId = searchParams.get('userId');
@@ -41,6 +43,8 @@ function EditPageContent() {
       itemsParam,
       taxParam,
       serviceChargeParam,
+      discountParam,
+      handlingFeeParam,
       splitOptionParam,
       billId
     });
@@ -60,10 +64,14 @@ function EditPageContent() {
       setTaxInput(taxValue?.toString() || '');
     }
     
-    if (serviceChargeParam) {
-      const parsedServiceCharge = serviceChargeParam === 'null' ? null : parseFloat(serviceChargeParam);
-      setServiceCharge(parsedServiceCharge);
-      setServiceChargeInput(parsedServiceCharge?.toString() || '');
+    if (discountParam) {
+      const discountValue = discountParam === 'null' ? null : parseFloat(discountParam);
+      setDiscount(discountValue);
+    }
+    
+    if (handlingFeeParam) {
+      const handlingFeeValue = handlingFeeParam === 'null' ? null : parseFloat(handlingFeeParam);
+      setHandlingFee(handlingFeeValue);
     }
     
     if (splitOptionParam) {
@@ -201,6 +209,8 @@ function EditPageContent() {
         })),
         tax: tax,
         serviceCharge: serviceCharge,
+        discount: discount,
+        handlingFee: handlingFee,
         total: total,
         updatedAt: new Date().toISOString()
       };
@@ -252,6 +262,8 @@ function EditPageContent() {
         })),
         tax: tax,
         serviceCharge: serviceCharge,
+        discount: discount,
+        handlingFee: handlingFee,
         total: total
       };
       
