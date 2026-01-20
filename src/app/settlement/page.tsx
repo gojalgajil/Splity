@@ -36,6 +36,8 @@ function SettlementPageContent() {
   const [showPersonImage, setShowPersonImage] = useState(false);
   const personImageRef = useRef<HTMLDivElement>(null);
   const [personImageData, setPersonImageData] = useState<{name: string, description: string} | null>(null);
+  const [discount, setDiscount] = useState<number | null>(null);
+  const [handlingFee, setHandlingFee] = useState<number | null>(null);
 
   const copyToClipboard = async (text: string) => {
     try {
@@ -169,6 +171,8 @@ function SettlementPageContent() {
         const itemsParam = searchParams.get('items');
         const taxParam = searchParams.get('tax');
         const serviceChargeParam = searchParams.get('serviceCharge');
+        const discountParam = searchParams.get('discount');
+        const handlingFeeParam = searchParams.get('handlingFee');
         const userId = searchParams.get('userId');
         const userName = searchParams.get('userName');
         const splitOptionParam = searchParams.get('splitOption');
@@ -186,6 +190,16 @@ function SettlementPageContent() {
             const items = JSON.parse(itemsParam);
             const tax = taxParam === 'null' ? null : (taxParam ? parseFloat(taxParam) : null);
             const serviceCharge = serviceChargeParam === 'null' ? null : (serviceChargeParam ? parseFloat(serviceChargeParam) : null);
+
+            if (discountParam) {
+              const discountValue = discountParam === 'null' ? null : parseFloat(discountParam);
+              setDiscount(discountValue);
+            }
+            
+            if (handlingFeeParam) {
+              const handlingFeeValue = handlingFeeParam === 'null' ? null : parseFloat(handlingFeeParam);
+              setHandlingFee(handlingFeeValue);
+            }
 
             // Get all people from localStorage
             const savedPeople = localStoragePeople.getPeople();
@@ -211,7 +225,9 @@ function SettlementPageContent() {
                 })),
                 tax: tax,
                 serviceCharge: serviceCharge,
-                total: items.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0) + (tax || 0) + (serviceCharge || 0),
+                discount: discount,
+                handlingFee: handlingFee,
+                total: items.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0) + (tax || 0) + (serviceCharge || 0) + (handlingFee || 0) - (discount || 0),
                 createdAt: new Date().toISOString(),
                 isTemporary: true
               };
@@ -230,7 +246,9 @@ function SettlementPageContent() {
                 })),
                 tax: tax,
                 serviceCharge: serviceCharge,
-                total: items.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0) + (tax || 0) + (serviceCharge || 0)
+                discount: discount,
+                handlingFee: handlingFee,
+                total: items.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0) + (tax || 0) + (serviceCharge || 0) + (handlingFee || 0) - (discount || 0)
               };
               localStorageBills.addBill(billForStorage);
 
